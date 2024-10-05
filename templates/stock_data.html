@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Metrics | Stock Analyzer
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Other content -->
+
+    <!-- Include metrics.html here -->
+    {% include 'stock_chart.html' %}
+
+    <!-- Other content -->
+</div>
+<div class="container">
+    <!-- Other content -->
+
+    <!-- Include metrics.html here -->
+    {% include 'metrics.html' %}
+
+    <!-- Other content -->
+</div>
+
+{% endblock %}

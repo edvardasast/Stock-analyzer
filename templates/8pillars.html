@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}8 Pillars{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>8 Pillars for <span id="symbol-name">AAPL</span></h2>
+
+    <div class="pillars-section">
+        <!-- 8 Pillars Section -->
+        <div class="pillars-data" id="pillars-data">
+            <!-- 8 Pillars data will be displayed here -->
+        </div>
+    </div>
+</div>
+<div class="container">
+    <!-- Other content -->
+
+    <!-- Include metrics.html here -->
+    {% include 'metrics.html' %}
+
+    <!-- Other content -->
+</div>
+{% endblock %}

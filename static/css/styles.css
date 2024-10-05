@@ -2,7 +2,8 @@
 body {
     background-color: #1a1a1a;
     color: #e0e0e0;
-    font-family: 'Arial', sans-serif;
+    font-family: Arial, sans-serif;
+    margin: 20px;
 }
 
 /* Navigation bar style */
@@ -25,7 +26,10 @@ body {
 
 /* Metrics section */
 .container {
-    margin-top: 40px;
+    margin-top: 20px;
+    color: #e0e0e0;
+    max-width: 800px;
+    margin: auto;
 }
 
 h2 {
@@ -154,4 +158,100 @@ canvas {
 .column div span:last-child {
     font-weight: bold;
     color: #fff;  /* White for values */
+}
+
+
+/* Key Metrics Section */
+.key-metrics-section {
+    margin-top: 20px;
+}
+
+.key-metrics-section .row {
+    margin-bottom: 10px;
+}
+
+.key-metrics-section h4 {
+    font-size: 1.1rem;
+    color: #1cb429;
+}
+
+.key-metrics-section span {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: #fff;
+}
+
+/* Pillars Data */
+.pillars-data {
+    margin-top: 20px;
+}
+
+.pillars-data table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.pillars-data th, .pillars-data td {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+.pillars-data th {
+    background-color: #f2f2f2;
+}
+
+.pillars-data .pillar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 columns */
+    gap: 10px; /* Space between items */
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+.pillars-data .pillar .metric {
+    padding: 10px;
+    align-self: center;
+    box-sizing: border-box;
+}
+
+.pillars-data .pillar .metric-good {
+    padding: 10px;
+    align-self: center;
+    width: 100%;
+    background-color: rgba(0, 255, 0, 0.3);
+    box-sizing: border-box;
+}
+.pillars-data .pillar .metric-bad {
+    padding: 10px;
+    align-self: center;
+    width: 100%;
+    background-color: rgba(255, 0, 0, 0.3);
+    box-sizing: border-box; 
+}
+.pillars-data .pillar .title {
+    font-size: xx-small;
+}
+.pillars-data .pillar .value {
+    font-size: large;
+    align-self: center;
+    padding-top: 10px;
+    box-sizing: border-box;
+    text-align: center; /* Center the text horizontally */
+    display: flex;
+    justify-content: center; /* Center the content horizontally */
+    align-items: center; /* Center the content vertically */
+}
+
+.pillars-data .metric span {
+    display: block;
+}
+
+.icon-check {
+    padding: 5px;
+    color: green;
+}
+
+.icon-cross {
+    padding: 5px;
+    color: red;
 }

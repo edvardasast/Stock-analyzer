@@ -15,7 +15,7 @@ document.getElementById("load-metrics").addEventListener("click", function() {
         setCookie('stockSymbol', stockSymbol.toUpperCase(), 7);
         
         // Redirect to the Metrics page with the stock symbol
-        window.location.href = `/metrics`;
+        window.location.href = `/stock_data`;
     } else {
         alert("Please enter a valid stock symbol.");
     }
@@ -331,6 +331,50 @@ function loadCashFlow(symbol) {
         .catch(error => console.error('Error fetching cash flow:', error));
 }
 
+// Function to fetch and display 8 Pillars data
+function loadEightPillars(symbol) {
+    fetch(`/api/8pillars?symbol=${symbol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error(`Error from API: ${data.error}`);
+                document.getElementById('pillars-data').innerHTML = `<p>Error: ${data.error}</p>`;
+            } else {
+                displayPillarsData(data.eight_pillars);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching 8 Pillars data:', error);
+            document.getElementById('pillars-data').innerHTML = `<p>Error: ${error.message}</p>`;
+        });
+}
+
+// Function to display 8 Pillars data
+function displayPillarsData(pillarsData) {
+    const criteria = {
+        "PE Ratio": value => value < 22.5,
+        "ROIC %": value => value > 0.09,
+        "Revenue Growth": value => value > 0,
+        "Net Income Growth": value => value > 0,
+        "Shares Outstanding Change %": value => value <= 0,  // Assuming stable or decreasing
+        "Long-term Debt B": value => value < 5,  // Assuming manageable debt
+        "Free Cash Flow Growth": value => value > 0,
+        "Price to Free Cash Flow": value => value < 22.5  // Assuming reasonable P/FCF
+    };
+
+    let html = '<div class="pillar">';
+    for (const [metric, value] of Object.entries(pillarsData)) {
+        if (criteria[metric]) {
+            const isMet = criteria[metric](value);
+            const statusIcon = isMet ? 'class="metric-good"' : 'class="metric-bad"';
+            html += `<div ${statusIcon}><div class="title"><span>${metric}</span></div><div class="value"><span>${value}</span></div></div>`;
+        } else {
+            console.error(`No criteria function found for metric: ${metric}`);
+        }
+    }
+    html += '</div></div>';
+    document.getElementById('pillars-data').innerHTML = html;
+}
 
 // Call this function when the page loads with the stock symbol
 document.addEventListener("DOMContentLoaded", function() {
@@ -353,4 +397,5 @@ document.addEventListener("DOMContentLoaded", function() {
     loadIncomeStatement(stockSymbol);
     loadBalanceSheet(stockSymbol);
     loadCashFlow(stockSymbol);
+    loadEightPillars(stockSymbol);  // Load 8 Pillars data
 });

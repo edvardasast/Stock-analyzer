@@ -8,9 +8,9 @@ app = Flask(__name__)
 def home():
     return render_template("base.html")
 
-@app.route("/metrics")
+@app.route("/stock_data")
 def metrics():
-    return render_template("metrics.html")
+    return render_template("stock_data.html")
 
 # Map ranges to yfinance period parameters
 range_mapping = {
@@ -250,37 +250,189 @@ def get_cash_flow():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route('/eight_pillars')
+@app.route('/8pillars')
 def eight_pillars():
-    return render_template("eight_pillars.html")
+    return render_template("8pillars.html")
 
-@app.route('/api/eight_pillars')
+@app.route('/api/8pillars')
 def get_eight_pillars():
     symbol = request.args.get('symbol', 'AAPL').upper()  # Default to AAPL if no symbol provided
     stock = yf.Ticker(symbol)
 
     try:
-        # Fetch 8pillars data (assuming it's available as stock.eight_pillars)
-        eight_pillars = stock.eight_pillars.T  # Transpose to get years as rows
-
-        # Convert the index (years) to strings for JSON serialization
-        eight_pillars.index = eight_pillars.index.strftime('%Y-%m-%d')
-
-        # Replace NaN values with 'N/A' (use .fillna method)
-        eight_pillars = eight_pillars.fillna('N/A')
-
-        # Convert DataFrame to dictionary for JSON serialization
-        eight_pillars_dict = eight_pillars.to_dict(orient="index")
-
+        # Fetch necessary data
+        financials = stock.financials
+        balance_sheet = stock.balance_sheet
+        cash_flow = stock.cashflow
+        info = stock.info
+        #balance_sheet.to_csv(f'{symbol}_balance_sheet.csv')
+        #financials.to_csv(f'{symbol}_financials.csv')
+        #cash_flow.to_csv(f'{symbol}_cash_flow.csv')
+        #info.to_csv(f'{symbol}_info.csv')
+        
+        # Calculate 8 Pillars
+        eight_pillars = {
+            "PE Ratio": round(info.get('forwardPE', 'N/A'),2),
+            "ROIC %": calculate_roic(financials, balance_sheet),
+            "Revenue Growth": calculate_growth(financials.loc['Total Revenue']),
+            "Net Income Growth": calculate_growth(financials.loc['Net Income']),
+            "Shares Outstanding Change %": calculate_shares_change(balance_sheet),
+            "Long-term Debt B": round(convert_series_to_dict(balance_sheet.loc['Long Term Debt'].iloc[0]) / 1e9, 2),
+            "Free Cash Flow Growth": calculate_growth(cash_flow.loc['Free Cash Flow']),
+            "Price to Free Cash Flow": calculate_price_to_free_cash_flow(info, cash_flow)
+        }
+        print("Outstanding shares", balance_sheet.loc['Common Stock'])
         # Prepare response data
         response = {
             "symbol": symbol,
-            "eight_pillars": eight_pillars_dict
+            "eight_pillars": eight_pillars
         }
         return jsonify(response)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+def calculate_roic(financials, balance_sheet):
+    print("Calling ROIC")
+    # Get the latest fiscal period (most recent column)
+    latest_period = financials.columns[0]
+    # Helper function to get item from DataFrame
+    def get_item(df, possible_labels):
+        for label in possible_labels:
+            if label in df.index:
+                return df.loc[label][latest_period]
+        return None  # Return None if none of the labels are found
+    
+    # Calculate NOPAT
+    try:
+        # Possible labels for Operating Income
+        operating_income_labels = ['Operating Income', 'EBIT']
+        operating_income = get_item(financials, operating_income_labels)
+        if operating_income is None:
+            print("Operating Income not found in income statement.")
+            return None
+        
+        # Possible labels for Income Before Tax
+        income_before_tax_labels = ['Income Before Tax', 'Pretax Income', 'Earnings Before Tax', 'EBT']
+        income_before_tax = get_item(financials, income_before_tax_labels)
+        if income_before_tax is None:
+            print("Income Before Tax not found in income statement.")
+            return None
+        
+        # Possible labels for Income Tax Expense
+        income_tax_expense_labels = ['Income Tax Expense', 'Provision for Income Taxes', 'Tax Provision']
+        income_tax_expense = get_item(financials, income_tax_expense_labels)
+        if income_tax_expense is None:
+            print("Income Tax Expense not found in income statement.")
+            return None
+        
+        # Effective Tax Rate
+        if income_before_tax != 0:
+            effective_tax_rate = income_tax_expense / income_before_tax
+        else:
+            effective_tax_rate = 0
+        
+        # NOPAT
+        nopat = operating_income * (1 - effective_tax_rate)
+    except KeyError as e:
+        print(f"Key error in income statement data: {e}")
+        return None
+    except Exception as e:
+        print(f"Error calculating NOPAT: {e}")
+        return None
+    
+    # Calculate Invested Capital
+    try:
+        # Possible labels for Total Equity
+        total_equity_labels = ['Total Stockholder Equity', "Total Shareholder's Equity", "Stockholders Equity"]
+        total_equity = get_item(balance_sheet, total_equity_labels)
+        if total_equity is None:
+            print("Total Equity not found in balance sheet.")
+            return None
+        
+        # Possible labels for Short-Term Debt
+        short_term_debt_labels = ['Short Long Term Debt', 'Short Term Debt', 'Current Portion of Long Term Debt']
+        short_term_debt = get_item(balance_sheet, short_term_debt_labels)
+        if short_term_debt is None:
+            short_term_debt = 0  # Assume zero if not found
+        
+        # Possible labels for Long-Term Debt
+        long_term_debt_labels = ['Long Term Debt', 'Long-Term Debt']
+        long_term_debt = get_item(balance_sheet, long_term_debt_labels)
+        if long_term_debt is None:
+            long_term_debt = 0  # Assume zero if not found
+        
+        total_debt = short_term_debt + long_term_debt
+        
+        # Possible labels for Cash and Equivalents
+        cash_labels = ['Cash', 'Cash And Cash Equivalents']
+        cash = get_item(balance_sheet, cash_labels)
+        if cash is None:
+            cash = 0  # Assume zero if not found
+        
+        short_term_investments_labels = ['Short Term Investments', 'Short-Term Investments']
+        short_term_investments = get_item(balance_sheet, short_term_investments_labels)
+        if short_term_investments is None:
+            short_term_investments = 0  # Assume zero if not found
+        
+        cash_and_equivalents = cash + short_term_investments
+        
+        # Invested Capital
+        invested_capital = total_equity + total_debt - cash_and_equivalents
+    except KeyError as e:
+        print(f"Key error in balance sheet data: {e}")
+        return None
+    except Exception as e:
+        print(f"Error calculating Invested Capital: {e}")
+        return None
+    
+    # Handle potential division by zero
+    if invested_capital == 0:
+        print("Invested Capital is zero, cannot calculate ROIC.")
+        return None
+    # Calculate ROIC
+    roic = (nopat / invested_capital) * 100  # Convert to percentage
+
+    # Output the results
+    print(f"Fiscal Period Ending: {latest_period.date()}")
+    print(f"NOPAT: ${nopat:,.2f}")
+    print(f"Invested Capital: ${invested_capital:,.2f}")
+    print(f"ROIC: {roic:.2f}%")
+
+    return round(roic, 2)
+    
+
+def calculate_shares_change(balance_sheet):
+    try:
+        shares_outstanding = balance_sheet.loc['Common Stock']
+        print("Share iloc -1 ", shares_outstanding.iloc[-1])
+        shares_change = round((((shares_outstanding.iloc[0] - shares_outstanding.iloc[-1]) / shares_outstanding.iloc[-1]) * 100), 2)
+        return convert_series_to_dict(shares_change) if isinstance(shares_change, pd.Series) else shares_change
+    except:
+        return 'N/A'
+    
+def calculate_growth(series):
+    try:
+        growth = (series.iloc[0] - series.iloc[-1]) / series.iloc[-1]
+        return convert_series_to_dict(round(growth,2)) if isinstance(round(growth,2), pd.Series) else round(growth,2)
+    except:
+        return 'N/A'
+
+def calculate_price_to_free_cash_flow(info, cash_flow):
+    try:
+        market_cap = info.get('marketCap', 0)
+        free_cash_flow = cash_flow.loc['Free Cash Flow'].iloc[0]
+        price_to_fcf = market_cap / free_cash_flow
+        return round(price_to_fcf,2)
+    except:
+        return 'N/A'
+
+def convert_series_to_dict(data):
+    if isinstance(data, pd.Series):
+        return {str(key): value for key, value in data.items()}
+    elif isinstance(data, float) or isinstance(data, int):  # Handle single float/int values
+        return data
+    else:
+        return 'N/A'  # In case of unknown types
 
 if __name__ == "__main__":
     app.run(debug=True)
