@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Balance Sheet{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2 class="mt-4">Balance Sheet for <span id="symbol-name"> </span></h2>
+
+    <div class="table-responsive">
+        <table class="table table-dark table-striped">
+            <thead>
+                <tr id="balance-sheet-years">
+                    <!-- Years (2024, 2023, etc.) will be dynamically populated here -->
+                    <th>Metrics</th>
+                </tr>
+            </thead>
+            <tbody id="balance-sheet-body">
+                <!-- Income Statement data (metrics) will be populated here dynamically -->
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
