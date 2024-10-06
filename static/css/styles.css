@@ -313,3 +313,36 @@ canvas {
     text-overflow: ellipsis;
     overflow: hidden;
 }
+
+.news-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.news-item img {
+    max-width: 140px;
+    margin-right: 20px;
+}
+
+.news-item .news-content {
+    flex: 1;
+}
+
+.news-item .news-content h2 {
+    margin: 0 0 10px;
+    font-size: 18px;
+    color: white;
+}
+
+.news-item .news-content p {
+    margin: 0;
+    color: #555;
+}
+
+.news-item .news-content a {
+    text-decoration: none;
+    color: white;
+}

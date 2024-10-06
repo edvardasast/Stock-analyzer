@@ -85,7 +85,8 @@ def fetch_stock_data(symbol):
         'growth_estimates': stock.growth_estimates,
         'recommendations': stock.recommendations,
         'recommendations_summary': stock.recommendations_summary,
-        'upgrades_downgrades': stock.upgrades_downgrades
+        'upgrades_downgrades': stock.upgrades_downgrades,
+        'news': stock.news
     }
     return data_cache[symbol]
 
@@ -390,12 +391,9 @@ def get_recomendations():
     try:
        # Fetch recomendations
         recomendations = stock_data['recommendations']
-        print("recomendations ", recomendations)
         recomendations_summary = stock_data['recommendations_summary']
-        print("recommendations_summary ", recomendations_summary)
         upgrades_downgrades = stock_data['upgrades_downgrades']
         upgrades_downgrades = upgrades_downgrades.iloc[:5]
-        print("upgrades_downgrades ", upgrades_downgrades.iloc[:5])
 
         recomendations = recomendations.fillna("N/A").infer_objects(copy=False)
         recomendations_summary = recomendations_summary.fillna("N/A").infer_objects(copy=False)
@@ -445,11 +443,8 @@ def get_analyst_estimates():
         eps_revisions = stock_data['eps_revisions']
         growth_estimates = stock_data['growth_estimates']
         recomendations = stock_data['recommendations']
-        print("recomendations ", recomendations)
         recomendations_summary = stock_data['recommendations_summary']
-        print("recommendations_summary ", recomendations_summary)
         upgrades_downgrades = stock_data['upgrades_downgrades']
-        print("upgrades_downgrades ", upgrades_downgrades.iloc[:5])
 
         earnings_estimate = earnings_estimate.fillna("N/A").infer_objects(copy=False)
         revenue_estimate = revenue_estimate.fillna("N/A").infer_objects(copy=False)
@@ -522,13 +517,11 @@ def get_ai_opinion():
             f"Key Financial Metrics:\n"
             f"{prompt}"
         )
-        print("System message ",system_message)
         user_message = (
             f"Provide short view about company situation. "
             f"Provide final decision in following format: ***Investment Attractiveness: 1/10 ***Multibagger Potential: 1/10 ***Shares: Overvalued/Undervalued. "
             f"Your answer must fit into 150 words."
         )
-        print("User message ",user_message)
 
         # Call the OpenAI API for chat models
         
@@ -542,10 +535,14 @@ def get_ai_opinion():
             temperature=0.7,
             n=1,
         )
+        # Extract token usage information
+        prompt_tokens = response.usage.prompt_tokens
+        completion_tokens = response.usage.completion_tokens
+        total_tokens = response.usage.total_tokens
+        print(f"Tokens used: Prompt tokens: {prompt_tokens} Completion tokens: {completion_tokens} Total: {total_tokens}")
 
         # Access the response
         ai_opinion = response.choices[0].message.content.strip().replace("***", "<br>")
-        print(ai_opinion)
         # Prepare response data
         response_data = {
             "symbol": symbol,
@@ -556,8 +553,25 @@ def get_ai_opinion():
         print("Error ", e)
         return jsonify({"error": str(e)}), 400
 
+@app.route('/news')
+def news():
+    return render_template("news.html")
+@app.route('/api/news')
+def get_news():
+    symbol = request.args.get('symbol', 'AAPL').upper()  # Default to AAPL if no symbol provided
+    stock_data = fetch_stock_data(symbol)
 
-
+    try:
+        # Fetch news data
+        news = stock_data['news']
+        response_data = {
+            "symbol": symbol,
+            "news": news
+        }
+        return jsonify(response_data)
+    except Exception as e:
+        print("Error ", e)
+        return jsonify({"error": str(e)}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)
