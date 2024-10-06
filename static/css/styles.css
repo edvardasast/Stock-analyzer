@@ -346,3 +346,45 @@ canvas {
     text-decoration: none;
     color: white;
 }
+
+.stock-card {
+    display: flex;
+    align-items: center;
+    background-color: #1c1c1c;
+    padding: 20px;
+    border-radius: 8px;
+}
+.stock-logo {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    margin-right: 20px;
+}
+.stock-info {
+    flex: 1;
+}
+.stock-info h2 {
+    margin: 0;
+    font-size: 24px;
+}
+.stock-info p {
+    margin: 4px 0;
+    color: #aaaaaa;
+    font-size: 14px;
+}
+.stock-price {
+    text-align: right;
+}
+.price {
+    font-size: 32px;
+    color: #ffffff;
+}
+.change {
+    font-size: 18px;
+}
+.change.positive {
+    color: #4caf50;
+}
+.change.negative {
+    color: #ff4c4c;
+}

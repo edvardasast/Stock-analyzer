@@ -86,7 +86,8 @@ def fetch_stock_data(symbol):
         'recommendations': stock.recommendations,
         'recommendations_summary': stock.recommendations_summary,
         'upgrades_downgrades': stock.upgrades_downgrades,
-        'news': stock.news
+        'news': stock.news,
+        'fast_info': stock.fast_info
     }
     return data_cache[symbol]
 
@@ -105,7 +106,8 @@ def get_stock_data():
         financials = stock_data['financials']
         balance_sheet = stock_data['balance_sheet']
         cash_flow_statement = stock_data['cash_flow']
-
+        fast_info = stock_data['fast_info']
+        print("Fast info", fast_info)
         # Get the corresponding period for the selected range
         period = range_mapping.get(range_param, '5y')
 
@@ -189,8 +191,12 @@ def get_stock_data():
             'roe': round(stock_info.get('returnOnEquity', 0) * 100, 2),  # Convert to percentage
             'company_description': stock_info.get('longBusinessSummary', 'N/A'),
             'company_name': stock_info.get('longName', 'N/A'),
+            'current_price': round(fast_info['last_price'], 2),
+            'price_change': round(fast_info['last_price'] - stock_info.get('regularMarketPreviousClose', 'N/A'), 2),
+            'price_change_percentage': round(((fast_info['last_price']-stock_info.get('regularMarketPreviousClose'))/stock_info.get('regularMarketPreviousClose')*100) ,2),
+            'currency': stock_info.get('currency', 'N/A'),
+            'website': stock_info.get('website', 'N/A'),
         }
-
         # Fetch historical price data for the selected period
         stock = yf.Ticker(symbol)
         hist = stock.history(period=period)
@@ -283,6 +289,9 @@ def get_cash_flow():
         return jsonify(response)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+def safe_round(value, decimals=2):
+        # Function to safely round values, converting NaN to "N/A"
+        return round(value, decimals) if isinstance(value, (int, float)) and not (value != value) else "N/A"  # value != value checks for NaN
 
 @app.route('/8pillars')
 def eight_pillars():
@@ -292,7 +301,7 @@ def eight_pillars():
 def get_eight_pillars():
     symbol = request.args.get('symbol', 'AAPL').upper()  # Default to AAPL if no symbol provided
     stock_data = fetch_stock_data(symbol)
-
+    
     try:
         financials = stock_data['financials']
         balance_sheet = stock_data['balance_sheet']
@@ -301,12 +310,12 @@ def get_eight_pillars():
 
         # Calculate 8 Pillars
         eight_pillars = {
-            "PE Ratio": round(info.get('forwardPE', 'N/A'), 2),
-            "ROIC %": calculate_roic(financials, balance_sheet),
+            "PE Ratio < 22.5": safe_round(info.get('forwardPE', 'N/A'), 2),
+            "ROIC > 10": calculate_roic(financials, balance_sheet),
             "Revenue Growth": calculate_growth(financials.loc['Total Revenue']),
             "Net Income Growth": calculate_growth(financials.loc['Net Income']),
-            "Shares Outstanding Change %": calculate_shares_change(balance_sheet),
-            "Long-term Debt B": round(balance_sheet.loc['Long Term Debt'].iloc[0] / 1e9, 2),
+            "Shares Outstanding Change": calculate_shares_change(balance_sheet),
+            "LTL / 4 Yr FCF < 5": safe_round(calculate_ltl(balance_sheet, cash_flow), 2),
             "Free Cash Flow Growth": calculate_growth(cash_flow.loc['Free Cash Flow']),
             "Price to Free Cash Flow": calculate_price_to_free_cash_flow(info, cash_flow)
         }
@@ -357,16 +366,33 @@ def calculate_roic(financials, balance_sheet):
 
 def calculate_shares_change(balance_sheet):
     try:
-        shares_outstanding = balance_sheet.loc['Common Stock']
-        shares_change = round((((shares_outstanding.iloc[0] - shares_outstanding.iloc[-1]) / shares_outstanding.iloc[-1]) * 100), 2)
+        shares_outstanding = balance_sheet.loc['Share Issued']
+        shares_change = safe_round((((shares_outstanding.iloc[0] - shares_outstanding.iloc[-1]) / shares_outstanding.iloc[-1]) * 100), 2)
         return shares_change
+    except:
+        return 'N/A'
+def calculate_ltl(balance_sheet,cash_flow):
+    try:
+        # Extract the operating cash flow and capital expenditures for the last 4 years
+        operating_cash_flows = cash_flow.loc['Operating Cash Flow'].values[:4]
+        capex = cash_flow.loc['Capital Expenditure'].values[:4]
+        debt = balance_sheet.loc['Long Term Debt'].iloc[0]
+        # Calculate free cash flow for the last 4 years
+        free_cash_flows = [op_cf + capex_val for op_cf, capex_val in zip(operating_cash_flows, capex)]
+        free_cash_flows_billion = [fcf for fcf in free_cash_flows]  # Convert to billions
+
+        # Calculate the 4-year average free cash flow
+        avg_free_cash_flow = round(sum(free_cash_flows_billion), 2)
+
+        ltl = debt / avg_free_cash_flow
+        return ltl
     except:
         return 'N/A'
 
 def calculate_growth(series):
     try:
-        growth = (series.iloc[0] - series.iloc[-1]) / series.iloc[-1]
-        return round(growth * 100, 2)  # Convert to percentage
+        growth = (series.iloc[0] - series.iloc[3]) / series.iloc[3]
+        return safe_round(growth * 100, 2)  # Convert to percentage
     except:
         return 'N/A'
 
@@ -375,7 +401,7 @@ def calculate_price_to_free_cash_flow(info, cash_flow):
         market_cap = info.get('marketCap', 0)
         free_cash_flow = cash_flow.loc['Free Cash Flow'].iloc[0]
         price_to_fcf = market_cap / free_cash_flow
-        return round(price_to_fcf, 2)
+        return safe_round(price_to_fcf, 2)
     except:
         return 'N/A'
 

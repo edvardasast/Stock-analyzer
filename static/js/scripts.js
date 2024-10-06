@@ -72,7 +72,22 @@ function fetchStockData(symbol) {
                 //Company Name and Description
                 document.getElementById("company_description").textContent = data.company_description;
                 document.getElementById("company_name").textContent = data.company_name;
-                console.log(data.company_description)
+                
+
+                // Set company information
+                document.getElementById("c-name").textContent =  data.company_name;
+                document.getElementById('currency-info').textContent = `Currency in ${data.currency}`;
+                document.getElementById('current-price').textContent = `$${data.current_price}`;
+                document.getElementById('price-change').textContent = `${data.price_change_percentage > 0 ? '\u2191' : '\u2193'} $${data.price_change} (${data.price_change_percentage}%)`;
+                document.getElementById('price-change').className = `change ${data.price_change_percentage > 0 ? 'positive' : 'negative'}`;
+
+                // Set company logo using favicon
+                const companyWebsite = data.website;
+                console.log(companyWebsite)
+                if (companyWebsite) {
+                    const logoUrl = `${companyWebsite}/favicon.ico`;
+                    document.getElementById('company-logo').src = logoUrl;
+                }
 
             } else {
                 //console.error('Element with id "metrics elements not found" not found.');
@@ -440,14 +455,24 @@ function loadEightPillars(symbol) {
 // Function to display 8 Pillars data
 function displayPillarsData(pillarsData) {
     const criteria = {
-        "PE Ratio": value => value < 22.5,
-        "ROIC %": value => value > 0.09,
+        "PE Ratio < 22.5": value => value < 22.5,
+        "ROIC > 10": value => value > 10,
         "Revenue Growth": value => value > 0,
         "Net Income Growth": value => value > 0,
-        "Shares Outstanding Change %": value => value <= 0,  // Assuming stable or decreasing
-        "Long-term Debt B": value => value < 5,  // Assuming manageable debt
+        "Shares Outstanding Change": value => value <= 0,  // Assuming stable or decreasing
+        "LTL / 4 Yr FCF < 5": value => value < 5,  // Assuming manageable debt
         "Free Cash Flow Growth": value => value > 0,
         "Price to Free Cash Flow": value => value < 22.5  // Assuming reasonable P/FCF
+    };
+    const units = {
+        "PE Ratio < 22.5": "",
+        "ROIC > 10": "%",
+        "Revenue Growth": "%",
+        "Net Income Growth": "%",
+        "Shares Outstanding Change": "%",
+        "LTL / 4 Yr FCF < 5": "",
+        "Free Cash Flow Growth": "%",
+        "Price to Free Cash Flow": ""
     };
 
     let html = '<div class="pillar">';
@@ -455,7 +480,8 @@ function displayPillarsData(pillarsData) {
         if (criteria[metric]) {
             const isMet = criteria[metric](value);
             const statusIcon = isMet ? 'class="metric-good"' : 'class="metric-bad"';
-            html += `<div ${statusIcon}><div class="title"><span>${metric}</span></div><div class="value"><span>${value}</span></div></div>`;
+            const unit = units[metric] || "";
+            html += `<div ${statusIcon}><div class="title"><span>${metric}</span></div><div class="value"><span>${value}${unit}</span></div></div>`;
         } else {
             console.error(`No criteria function found for metric: ${metric}`);
         }
