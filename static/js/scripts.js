@@ -90,6 +90,9 @@ function fetchStockData(symbol) {
                 document.getElementById('current-price').textContent = `$${data.current_price}`;
                 document.getElementById('price-change').textContent = `${data.price_change_percentage > 0 ? '\u2191' : '\u2193'} $${data.price_change} (${data.price_change_percentage}%)`;
                 document.getElementById('price-change').className = `change ${data.price_change_percentage > 0 ? 'positive' : 'negative'}`;
+                document.getElementById('industry').textContent = data.industry;
+                document.getElementById('sector').textContent = data.sector;
+
 
                 // Set company logo using favicon
                 const companyWebsite = data.website;
@@ -653,6 +656,29 @@ function loadAnalystEstimates(symbol) {
 }
 
 // Function to fetch AI opinion and display it
+function loadAnnualReports(stockSymbol) {
+    fetch(`/api/annual_reports?symbol=${stockSymbol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error fetching AI opinion:', data.error);
+                document.getElementById('ai-opinion').innerHTML = `<p>Error: ${data.error}</p>`;
+            } else {
+                const annualReportsButton = document.getElementById('annual-reports');
+                if (annualReportsButton) {
+                    annualReportsButton.href = data.link;  // Set the href attribute with the returned link
+                    annualReportsButton.target = '_blank';  // Open the link in a new tab
+                    console.log(`Annual reports link set to: ${data.link}`);
+                }
+                }
+        })
+        .catch(error => {
+            console.error('Error fetching AI opinion:', error);
+            document.getElementById('ai-opinion').innerHTML = `<p>Error: ${error.message}</p>`;
+        });
+}
+
+// Function to fetch AI opinion and display it
 function loadAIOpinion(stockSymbol) {
     fetch(`/api/ai_opinion?symbol=${stockSymbol}`)
         .then(response => response.json())
@@ -670,6 +696,7 @@ function loadAIOpinion(stockSymbol) {
             document.getElementById('ai-opinion').innerHTML = `<p>Error: ${error.message}</p>`;
         });
 }
+
 
 // Function to handle the button click event
 function askAIOpinion() {
@@ -809,5 +836,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     else if (currentUrl.includes('/income_statement')) {
         loadIncomeStatement(stockSymbol);   // Load income statement data
+    }
+    else if (currentUrl.includes('/stock_data')) {
+        loadAnnualReports(stockSymbol);  // Load Annual Reports opinion
     }
 });

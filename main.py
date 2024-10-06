@@ -1,5 +1,6 @@
 from flask import Flask, render_template, jsonify, request, session
 from flask_session import Session
+import requests
 import yfinance as yf
 import pandas as pd
 import tempfile
@@ -22,9 +23,6 @@ Session(app)
 # Global cache to store yfinance data
 data_cache = {}
 
-# FinancialModelingPrep API Key
-API_KEY = os.getenv('FMP_API_KEY')
-
 # OpenAI API Key
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 client = OpenAI(
@@ -33,8 +31,6 @@ client = OpenAI(
 # Check if the keys are loaded
 if not app.secret_key:
     raise ValueError("No SECRET_KEY set for Flask application. Please set it in your .env file.")
-if not API_KEY:
-    raise ValueError("No FMP_API_KEY found. Please set it in your .env file.")
 if not OPENAI_API_KEY:
     raise ValueError("No OPENAI_API_KEY found. Please set it in your .env file.")
 
@@ -206,6 +202,8 @@ def get_stock_data():
             'price_change_percentage': round(((fast_info['last_price']-stock_info.get('regularMarketPreviousClose'))/stock_info.get('regularMarketPreviousClose')*100) ,2),
             'currency': stock_info.get('currency', 'N/A'),
             'website': stock_info.get('website', 'N/A'),
+            'industry': stock_info.get('industry', 'N/A'),
+            'sector': stock_info.get('sector', 'N/A'),
         }
         # Fetch historical price data for the selected period
         stock = yf.Ticker(symbol)
@@ -629,6 +627,36 @@ def get_dividends():
     except Exception as e:
         print("Error ", e)
         return jsonify({"error": str(e)}), 400
+
+@app.route('/api/annual_reports')
+def get_annualReports():
+    symbol = request.args.get('symbol', 'AAPL').upper()  # Default to AAPL if no symbol provided
+    try:
+        # Make request to SEC API with headers
+        sec_url = f'https://efts.sec.gov/LATEST/search-index?keysTyped={symbol}'
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br, zstd',
+            'Accept-Language': 'en-US,en;q=0.9,lt-LT;q=0.8,lt;q=0.7,de-DE;q=0.6,de;q=0.5,ru-RU;q=0.4,ru;q=0.3,es-ES;q=0.2,es;q=0.1,zh-MO;q=0.1,zh;q=0.1',
+            'Cache-Control': 'max-age=0'
+        }
+        response = requests.get(sec_url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        # Extract _id from response
+        _id = data['hits']['hits'][0]['_id']
+        sec_link = f'https://www.sec.gov/edgar/browse/?CIK={_id}'
+        response_data = {
+            "symbol": symbol,
+            "link": sec_link
+        }
+        return jsonify(response_data)
+    except Exception as e:
+        print("Error ", e)
+        return jsonify({"error": str(e)}), 400
+    
 
 if __name__ == "__main__":
     app.run(debug=True)
