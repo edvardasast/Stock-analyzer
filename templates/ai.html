@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}
+    AI Opinion | Stock Analyzer
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="button-container">
+        <button id="ask-ai-opinion-btn" class="btn btn-primary" onclick="askAIOpinion()">Ask AI Opinion</button>
+    </div>
+    <div id="ai-opinion"></div>
+</div> 
+{% endblock %}

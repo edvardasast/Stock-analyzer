@@ -114,6 +114,12 @@ h4 {
     border: none;
 }
 
+.button-container {
+    display: flex;
+    justify-content: center;
+    margin: 20px; /* Optional: Add some margin to the top */
+}
+
 .btn-group .btn.active,
 .btn-group .btn:hover {
     background-color: #4caf50; /* Green for active and hover effect */
@@ -246,12 +252,64 @@ canvas {
     display: block;
 }
 
-.icon-check {
-    padding: 5px;
-    color: green;
+/* Analyst estimates table */
+#analyst-estimates table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
 }
 
-.icon-cross {
-    padding: 5px;
-    color: red;
+#analyst-estimates th, #analyst-estimates td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+    color: #fff;
+}
+
+#analyst-estimates th {
+    background-color: #343a40;
+}
+
+#analyst-estimates td {
+    background-color: #2a2a2a;
+}
+/* Style for recommendation tables */
+#recommendations-summary table, 
+#recommendations table, 
+#upgrades-downgrades table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+#recommendations-summary th, 
+#recommendations th, 
+#upgrades-downgrades th, 
+#recommendations-summary td, 
+#recommendations td, 
+#upgrades-downgrades td {
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+    color: #fff;
+}
+
+#recommendations-summary th, 
+#recommendations th, 
+#upgrades-downgrades th {
+    background-color: #343a40;
+}
+
+#recommendations-summary td, 
+#recommendations td, 
+#upgrades-downgrades td {
+    background-color: #2a2a2a;
+}
+.price-targets {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 columns */
+    gap: 10px; /* Space between items */
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }

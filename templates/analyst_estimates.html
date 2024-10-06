@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Analyst Estimates | Stock Analyzer
+{% endblock %}
+
+{% block content %}
+<div class="container">
+
+    <h2 class="mt-4">Analyst Estimates for <span id="symbol-name"></span></h2>
+
+        <div id="analyst-estimates">
+            <!-- Analyst price targets -->
+            <h3>Price Targets</h3>
+            <div id="price-targets"></div>
+
+            <!-- Earnings estimate -->
+            <h3>Earnings Estimate</h3>
+            <div id="earnings-estimate"></div>
+
+            <!-- Revenue estimate -->
+            <h3>Revenue Estimate</h3>
+            <div id="revenue-estimate"></div>
+
+            <!-- Earnings history -->
+            <h3>Earnings History</h3>
+            <div id="earnings-history"></div>
+
+            <!-- EPS Trend -->
+            <h3>EPS Trend</h3>
+            <div id="eps-trend"></div>
+
+            <!-- EPS Revisions -->
+            <h3>EPS Revisions</h3>
+            <div id="eps-revisions"></div>
+
+            <!-- Growth Estimates -->
+            <h3>Growth Estimates</h3>
+            <div id="growth-estimates"></div>
+        </div>
+
+{% endblock %}

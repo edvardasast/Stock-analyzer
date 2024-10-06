@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Analyst Estimates | Stock Analyzer
+{% endblock %}
+
+{% block content %}
+<div class="container">
+
+    <h2 class="mt-4">Analyst Estimates for <span id="symbol-name"></span></h2>
+
+       <!-- Recommendations Summary Section -->
+       <h3>Recommendations Summary</h3>
+       <div id="recommendations-summary">
+           <!-- Recommendations summary will be injected here -->
+       </div>
+
+       <!-- Recommendations Section -->
+       <h3>Analyst Recommendations</h3>
+       <div id="recommendations">
+           <!-- Recommendations will be injected here -->
+       </div>
+
+       <!-- Upgrades/Downgrades Section -->
+       <h3>Recent Upgrades/Downgrades</h3>
+       <div id="upgrades-downgrades">
+           <!-- Upgrades/Downgrades will be injected here -->
+       </div>
+
+{% endblock %}

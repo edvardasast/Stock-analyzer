@@ -1,5 +1,5 @@
 let chart;  // Declare chart globally
-
+let symbol = ''
 function setCookie(name, value, days) {
     const date = new Date();
     date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000)); // Set expiration date
@@ -7,13 +7,13 @@ function setCookie(name, value, days) {
     document.cookie = name + "=" + value + ";" + expires + ";path=/"; // Set cookie with expiration
 }
 
-document.getElementById("load-metrics").addEventListener("click", function() {
+document.getElementById("load-metrics").addEventListener("click", function () {
     const stockSymbol = document.getElementById("stock-symbol").value.trim();
-    
+
     if (stockSymbol) {
         // Save stock symbol to cookies for 7 days
         setCookie('stockSymbol', stockSymbol.toUpperCase(), 7);
-        
+
         // Redirect to the Metrics page with the stock symbol
         window.location.href = `/stock_data`;
     } else {
@@ -42,38 +42,41 @@ function fetchStockData(symbol) {
                 alert(data.error);
                 return;
             }
-               console.log(data)
-               const element = document.getElementById('market-cap');
+            console.log(data)
+            const element = document.getElementById('market-cap');
             if (element) {
                 // Safe to manipulate the element
-                 // Left Column Data
-               document.getElementById("market-cap").textContent = `$${data.market_cap}T`;
-               document.getElementById("revenue").textContent = `$${data.revenue}B`;
-               document.getElementById("net-income").textContent = `$${data.net_income}B`;
-               document.getElementById("4yr_avg_net_income").textContent = `$${data.four_year_avg_net_income}B`;
-               document.getElementById("pe").textContent = data.pe_ratio;
-               document.getElementById("ps-ratio").textContent = data.ps_ratio;
-               document.getElementById("profit-margin").textContent = `${data.profit_margin}%`;
-               document.getElementById("4yr-profit-margin").textContent = `${data.four_year_profit_margin}%`;
-               document.getElementById("gross-profit-margin").textContent = `${data.gross_profit_margin}%`;
-               document.getElementById("3yr-revenue-growth").textContent = `${data.three_year_revenue_growth}%`;
-   
-               // Middle Column Data
-               document.getElementById("fcf").textContent = `$${data.free_cash_flow}B`;
-               document.getElementById("4yr-fcf").textContent = `$${data.four_year_avg_fcf}B`;
-               document.getElementById("price-to-fcf").textContent = data.price_to_fcf;
-               document.getElementById("dividend-yield").textContent = `${data.dividend_yield}%`;
-               document.getElementById("dividends-paid").textContent = `$${data.dividends_paid}B`;
-               document.getElementById("5yr-avg-dividend-yield").textContent = `${data.five_year_average_dividend_yield}%`;
-               document.getElementById("ev-earnings").textContent = data.ev_to_earnings;
-               document.getElementById("roa").textContent = data.roa ? `${data.roa}%` : 'N/A';
-               document.getElementById("roe").textContent = data.roe ? `${data.roe}%` : 'N/A';
+                // Left Column Data
+                document.getElementById("market-cap").textContent = `$${data.market_cap}T`;
+                document.getElementById("revenue").textContent = `$${data.revenue}B`;
+                document.getElementById("net-income").textContent = `$${data.net_income}B`;
+                document.getElementById("4yr_avg_net_income").textContent = `$${data.four_year_avg_net_income}B`;
+                document.getElementById("pe").textContent = data.pe_ratio;
+                document.getElementById("ps-ratio").textContent = data.ps_ratio;
+                document.getElementById("profit-margin").textContent = `${data.profit_margin}%`;
+                document.getElementById("4yr-profit-margin").textContent = `${data.four_year_profit_margin}%`;
+                document.getElementById("gross-profit-margin").textContent = `${data.gross_profit_margin}%`;
+                document.getElementById("3yr-revenue-growth").textContent = `${data.three_year_revenue_growth}%`;
+
+                // Middle Column Data
+                document.getElementById("fcf").textContent = `$${data.free_cash_flow}B`;
+                document.getElementById("4yr-fcf").textContent = `$${data.four_year_avg_fcf}B`;
+                document.getElementById("price-to-fcf").textContent = data.price_to_fcf;
+                document.getElementById("dividend-yield").textContent = `${data.dividend_yield}%`;
+                document.getElementById("dividends-paid").textContent = `$${data.dividends_paid}B`;
+                document.getElementById("5yr-avg-dividend-yield").textContent = `${data.five_year_average_dividend_yield}%`;
+                document.getElementById("ev-earnings").textContent = data.ev_to_earnings;
+                document.getElementById("roa").textContent = data.roa ? `${data.roa}%` : 'N/A';
+                document.getElementById("roe").textContent = data.roe ? `${data.roe}%` : 'N/A';
+
+                //Company Name and Description
+                document.getElementById("company_description").textContent = data.company_description;
+                document.getElementById("company_name").textContent = data.company_name;
+                console.log(data.company_description)
 
             } else {
                 //console.error('Element with id "metrics elements not found" not found.');
             }
-              
-
             // Find and pass the 5Yr button by its ID to updateChart function
             const fiveYearButton = document.getElementById('fiveYearBtn');
             updateChart("5Y", fiveYearButton, symbol);
@@ -81,7 +84,92 @@ function fetchStockData(symbol) {
         .catch(error => console.error("Error fetching data:", error));
 }
 
-function updateChart(range, button, stockSymbol) {
+// Function to fetch and display stock recommendations
+function loadRecommendations(symbol) {
+    fetch(`/api/recomendations?symbol=${symbol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error(`Error from API: ${data.error}`);
+                document.getElementById('recommendations').innerHTML = `<p>Error: ${data.error}</p>`;
+                return;
+            }
+
+            // Display Symbol
+            document.getElementById('symbol-name').textContent = symbol;
+
+            // Display Recommendations Summary
+            const recommendationsSummary = data.recomendations_summary;
+            console.log(recommendationsSummary)
+            if (recommendationsSummary && recommendationsSummary.length > 0) {
+                let summaryHtml = '<table><thead><tr><th>Period</th><th>Strong Buy</th><th>Buy</th><th>Hold</th><th>Sell</th><th>Strong Sell</th></tr></thead><tbody>';
+                recommendationsSummary.forEach(summary => {
+                    summaryHtml += `
+                        <tr>
+                            <td>${summary.period}</td>
+                            <td>${summary.strongBuy}</td>
+                            <td>${summary.buy}</td>
+                            <td>${summary.hold}</td>
+                            <td>${summary.sell}</td>
+                            <td>${summary.strongSell}</td>
+                        </tr>`;
+                });
+                summaryHtml += '</tbody></table>';
+                document.getElementById('recommendations-summary').innerHTML = summaryHtml;
+            } else {
+                document.getElementById('recommendations-summary').innerHTML = '<p>No recommendations summary available.</p>';
+            }
+
+            // Display Recommendations
+            const recommendations = data.recomendations;
+            if (recommendations && recommendations.length > 0) {
+                let recommendationsHtml = '<table><thead><tr><th>Period</th><th>Strong Buy</th><th>Buy</th><th>Hold</th><th>Sell</th><th>Strong Sell</th></tr></thead><tbody>';
+                recommendations.forEach(recommendation => {
+                    recommendationsHtml += `
+                        <tr>
+                            <td>${recommendation.period}</td>
+                            <td>${recommendation.strongBuy}</td>
+                            <td>${recommendation.buy}</td>
+                            <td>${recommendation.hold}</td>
+                            <td>${recommendation.sell}</td>
+                            <td>${recommendation.strongSell}</td>
+                        </tr>`;
+                });
+                recommendationsHtml += '</tbody></table>';
+                document.getElementById('recommendations').innerHTML = recommendationsHtml;
+            } else {
+                document.getElementById('recommendations').innerHTML = '<p>No recommendations available.</p>';
+            }
+
+            // Display Upgrades/Downgrades
+            const upgradesDowngrades = data.upgrades_downgrades;
+            if (upgradesDowngrades && upgradesDowngrades.length > 0) {
+                let upgradesHtml = '<table><thead><tr><th>Date</th><th>Firm</th><th>To Grade</th><th>From Grade</th><th>Action</th></tr></thead><tbody>';
+                upgradesDowngrades.forEach(upgrade => {
+                    upgradesHtml += `
+                        <tr>
+                            <td>${new Date(upgrade.GradeDate).toLocaleDateString()}</td>
+                            <td>${upgrade.Firm}</td>
+                            <td>${upgrade.ToGrade}</td>
+                            <td>${upgrade.FromGrade}</td>
+                            <td>${upgrade.Action}</td>
+                        </tr>`;
+                });
+                upgradesHtml += '</tbody></table>';
+                document.getElementById('upgrades-downgrades').innerHTML = upgradesHtml;
+            } else {
+                document.getElementById('upgrades-downgrades').innerHTML = '<p>No upgrades/downgrades available.</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching recommendations:', error);
+            document.getElementById('recommendations').innerHTML = `<p>Error: ${error.message}</p>`;
+        });
+}
+
+
+function updateChart(range, button) {
+    const stockSymbol = getCookie('stockSymbol');
     if (button) {
         // Remove 'active' class from all buttons
         const buttons = document.querySelectorAll('#timeRangeButtons .btn');
@@ -109,7 +197,7 @@ function updateChart(range, button, stockSymbol) {
             // Re-create the canvas context
             const canvas = document.getElementById('priceChart');
             const ctx = canvas.getContext('2d');
-            
+
             // Create a new chart with updated data
             chart = new Chart(ctx, {
                 type: 'line',
@@ -375,10 +463,192 @@ function displayPillarsData(pillarsData) {
     html += '</div></div>';
     document.getElementById('pillars-data').innerHTML = html;
 }
+// Function to fetch and display analyst estimates
+function loadAnalystEstimates(symbol) {
+    fetch(`/api/analyst_estimates?symbol=${symbol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error(`Error from API: ${data.error}`);
+                document.getElementById('analyst-estimates').innerHTML = `<p>Error: ${data.error}</p>`;
+                return;
+            }
+
+            document.getElementById('symbol-name').textContent = symbol;
+
+            // Display Price Targets
+            const priceTargets = data.analyst_price_targets;
+            if (priceTargets) {
+                let priceTargetHtml = `
+                    <div class="price-targets">
+                    <p>Low: $${priceTargets.low}</p>
+                    <p>High: $${priceTargets.high}</p>
+                    <p>Median: $${priceTargets.median}</p>
+                    <p>Mean: $${priceTargets.mean}</p></div>
+                `;
+                document.getElementById('price-targets').innerHTML = priceTargetHtml;
+            }
+
+            // Display Earnings Estimate
+            const earningsEstimate = data.earnings_estimate;
+            if (earningsEstimate && Array.isArray(earningsEstimate)) {
+                let earningsHtml = '<table><thead><tr><th>Avg</th><th>Growth</th><th>High</th><th>Low</th><th>Analysts</th><th>Year Ago EPS</th></tr></thead><tbody>';
+
+                earningsEstimate.forEach(estimate => {
+                    earningsHtml += `
+                        <tr>
+                            <td>${estimate.avg}</td>
+                            <td>${(estimate.growth * 100).toFixed(2)}%</td>  <!-- Convert growth to percentage -->
+                            <td>${estimate.high}</td>
+                            <td>${estimate.low}</td>
+                            <td>${estimate.numberOfAnalysts}</td>
+                            <td>${estimate.yearAgoEps}</td>
+                        </tr>`;
+                });
+
+                earningsHtml += '</tbody></table>';
+                document.getElementById('earnings-estimate').innerHTML = earningsHtml;
+            }
+
+            // Display Revenue Estimate
+            const revenueEstimate = data.revenue_estimate;
+            if (revenueEstimate && Array.isArray(revenueEstimate)) {
+                let revenueHtml = '<table><thead><tr><th>Avg (Billions)</th><th>Growth</th><th>High</th><th>Low</th><th>Analysts</th><th>Year Ago Revenue</th></tr></thead><tbody>';
+
+                revenueEstimate.forEach(estimate => {
+                    revenueHtml += `
+                        <tr>
+                            <td>$${(estimate.avg / 1e9).toFixed(2)}B</td>  <!-- Convert to billions -->
+                            <td>${(estimate.growth * 100).toFixed(2)}%</td>  <!-- Convert growth to percentage -->
+                            <td>$${(estimate.high / 1e9).toFixed(2)}B</td>
+                            <td>$${(estimate.low / 1e9).toFixed(2)}B</td>
+                            <td>${estimate.numberOfAnalysts}</td>
+                            <td>$${(estimate.yearAgoRevenue / 1e9).toFixed(2)}B</td>
+                        </tr>`;
+                });
+
+                revenueHtml += '</tbody></table>';
+                document.getElementById('revenue-estimate').innerHTML = revenueHtml;
+            }
+
+            // Display Earnings History
+            const earningsHistory = data.earnings_history;
+            if (earningsHistory && Array.isArray(earningsHistory)) {
+                let earningsHistoryHtml = '<table><thead><tr><th>EPS Actual</th><th>EPS Estimate</th><th>EPS Difference</th><th>Surprise %</th></tr></thead><tbody>';
+
+                earningsHistory.forEach(history => {
+                    earningsHistoryHtml += `
+                        <tr>
+                            <td>${history.epsActual}</td>
+                            <td>${history.epsEstimate}</td>
+                            <td>${history.epsDifference}</td>
+                            <td>${(history.surprisePercent * 100).toFixed(2)}%</td>
+                        </tr>`;
+                });
+
+                earningsHistoryHtml += '</tbody></table>';
+                document.getElementById('earnings-history').innerHTML = earningsHistoryHtml;
+            }
+
+            // Display EPS Trend
+            const epsTrend = data.eps_trend;
+            if (epsTrend && Array.isArray(epsTrend)) {
+                let epsTrendHtml = '<table><thead><tr><th>7 Days Ago</th><th>30 Days Ago</th><th>60 Days Ago</th><th>90 Days Ago</th><th>Current</th></tr></thead><tbody>';
+
+                epsTrend.forEach(trend => {
+                    epsTrendHtml += `
+                        <tr>
+                            <td>${trend['7daysAgo']}</td>
+                            <td>${trend['30daysAgo']}</td>
+                            <td>${trend['60daysAgo']}</td>
+                            <td>${trend['90daysAgo']}</td>
+                            <td>${trend.current}</td>
+                        </tr>`;
+                });
+
+                epsTrendHtml += '</tbody></table>';
+                document.getElementById('eps-trend').innerHTML = epsTrendHtml;
+            }
+
+            // Display EPS Revisions
+            const epsRevisions = data.eps_revisions;
+            if (epsRevisions && Array.isArray(epsRevisions)) {
+                let epsRevisionsHtml = '<table><thead><tr><th>Up (Last 7 Days)</th><th>Down (Last 7 Days)</th><th>Up (Last 30 Days)</th><th>Down (Last 30 Days)</th></tr></thead><tbody>';
+
+                epsRevisions.forEach(revision => {
+                    epsRevisionsHtml += `
+            <tr>
+                <td>${revision.upLast7days !== null ? revision.upLast7days : 'N/A'}</td>
+                <td>${revision.downLast7days !== null ? revision.downLast7days : 'N/A'}</td>
+                <td>${revision.upLast30days !== null ? revision.upLast30days : 'N/A'}</td>
+                <td>${revision.downLast30days !== null ? revision.downLast30days : 'N/A'}</td>
+            </tr>`;
+                });
+
+                epsRevisionsHtml += '</tbody></table>';
+                document.getElementById('eps-revisions').innerHTML = epsRevisionsHtml;
+            }
+
+
+            // Display Growth Estimates
+            const growthEstimates = data.growth_estimates;
+            if (growthEstimates && Array.isArray(growthEstimates)) {
+                let growthHtml = '<table><thead><tr><th>Index Growth</th><th>Industry Growth</th><th>Sector Growth</th><th>Stock Growth</th></tr></thead><tbody>';
+
+                growthEstimates.forEach(estimate => {
+                    growthHtml += `
+            <tr>
+                <td>${(estimate.index * 100).toFixed(2)}%</td> <!-- Convert to percentage -->
+                <td>${estimate.industry !== "N/A" ? estimate.industry : 'N/A'}</td>
+                <td>${estimate.sector !== "N/A" ? estimate.sector : 'N/A'}</td>
+                <td>${(estimate.stock * 100).toFixed(2)}%</td> <!-- Convert to percentage -->
+            </tr>`;
+                });
+
+                growthHtml += '</tbody></table>';
+                document.getElementById('growth-estimates').innerHTML = growthHtml;
+            }
+
+        })
+        .catch(error => {
+            console.error('Error fetching analyst estimates:', error);
+            document.getElementById('analyst-estimates').innerHTML = `<p>Error: ${error.message}</p>`;
+        });
+}
+
+// Function to fetch AI opinion and display it
+function loadAIOpinion(stockSymbol) {
+    fetch(`/api/ai_opinion?symbol=${stockSymbol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error fetching AI opinion:', data.error);
+                document.getElementById('ai-opinion').innerHTML = `<p>Error: ${data.error}</p>`;
+            } else {
+                const aiOpinion = data.ai_opinion;
+                document.getElementById('ai-opinion').innerHTML = `<p>${aiOpinion}</p>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching AI opinion:', error);
+            document.getElementById('ai-opinion').innerHTML = `<p>Error: ${error.message}</p>`;
+        });
+}
+
+// Function to handle the button click event
+function askAIOpinion() {
+    const stockSymbol = getCookie('stockSymbol');  // Fetch from cookies
+    if (stockSymbol) {
+        loadAIOpinion(stockSymbol);
+    } else {
+        console.error('Stock symbol not found.');
+        document.getElementById('ai-opinion').innerHTML = `<p>Error: Stock symbol not found.</p>`;
+    }
+}
 
 // Call this function when the page loads with the stock symbol
-document.addEventListener("DOMContentLoaded", function() {
-    const stockSymbol =  getCookie('stockSymbol');  // Fetch from cookies
+document.addEventListener("DOMContentLoaded", function () {
+    const stockSymbol = getCookie('stockSymbol');  // Fetch from cookies
     console.log(stockSymbol)
     if (document.getElementById('symbol-name')) {
         // Safe to manipulate the element
@@ -392,10 +662,12 @@ document.addEventListener("DOMContentLoaded", function() {
     } else {
         //console.error('Element with id "cash-flow" not found.');
     }
-    
-    fetchStockData(stockSymbol);
-    loadIncomeStatement(stockSymbol);
-    loadBalanceSheet(stockSymbol);
-    loadCashFlow(stockSymbol);
+
+    fetchStockData(stockSymbol); // Fetch stock data
+    loadIncomeStatement(stockSymbol);   // Load income statement data
+    loadBalanceSheet(stockSymbol); // Load balance sheet data
+    loadCashFlow(stockSymbol); // Load cash flow data
     loadEightPillars(stockSymbol);  // Load 8 Pillars data
+    loadAnalystEstimates(stockSymbol); // Load analyst estimates
+    loadRecommendations(stockSymbol); // Load stock recommendations
 });
