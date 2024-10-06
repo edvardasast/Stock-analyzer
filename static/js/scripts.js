@@ -531,17 +531,17 @@ function loadAnalystEstimates(symbol) {
             // Display Earnings Estimate
             const earningsEstimate = data.earnings_estimate;
             if (earningsEstimate && Array.isArray(earningsEstimate)) {
-                let earningsHtml = '<table><thead><tr><th>Avg</th><th>Growth</th><th>High</th><th>Low</th><th>Analysts</th><th>Year Ago EPS</th></tr></thead><tbody>';
+                let earningsHtml = '<table><thead><tr><th>Growth</th><th>High</th><th>Low</th><th>Avg</th><th>Year Ago EPS</th><th>Analysts</th></tr></thead><tbody>';
 
                 earningsEstimate.forEach(estimate => {
                     earningsHtml += `
                         <tr>
-                            <td>${estimate.avg}</td>
                             <td>${(estimate.growth * 100).toFixed(2)}%</td>  <!-- Convert growth to percentage -->
                             <td>${estimate.high}</td>
                             <td>${estimate.low}</td>
-                            <td>${estimate.numberOfAnalysts}</td>
+                            <td>${estimate.avg}</td>
                             <td>${estimate.yearAgoEps}</td>
+                            <td>${estimate.numberOfAnalysts}</td>
                         </tr>`;
                 });
 
@@ -552,17 +552,17 @@ function loadAnalystEstimates(symbol) {
             // Display Revenue Estimate
             const revenueEstimate = data.revenue_estimate;
             if (revenueEstimate && Array.isArray(revenueEstimate)) {
-                let revenueHtml = '<table><thead><tr><th>Avg (Billions)</th><th>Growth</th><th>High</th><th>Low</th><th>Analysts</th><th>Year Ago Revenue</th></tr></thead><tbody>';
+                let revenueHtml = '<table><thead><tr><th>Growth</th><th>High</th><th>Low</th><th>Avg</th><th>Year Ago Revenue</th><th>Analysts</th></tr></thead><tbody>';
 
                 revenueEstimate.forEach(estimate => {
                     revenueHtml += `
                         <tr>
-                            <td>$${(estimate.avg / 1e9).toFixed(2)}B</td>  <!-- Convert to billions -->
                             <td>${(estimate.growth * 100).toFixed(2)}%</td>  <!-- Convert growth to percentage -->
                             <td>$${(estimate.high / 1e9).toFixed(2)}B</td>
                             <td>$${(estimate.low / 1e9).toFixed(2)}B</td>
-                            <td>${estimate.numberOfAnalysts}</td>
+                            <td>$${(estimate.avg / 1e9).toFixed(2)}B</td>  <!-- Convert to billions -->
                             <td>$${(estimate.yearAgoRevenue / 1e9).toFixed(2)}B</td>
+                            <td>${estimate.numberOfAnalysts}</td>
                         </tr>`;
                 });
 
@@ -597,11 +597,11 @@ function loadAnalystEstimates(symbol) {
                 epsTrend.forEach(trend => {
                     epsTrendHtml += `
                         <tr>
+                            <td>${trend.current}</td>
                             <td>${trend['7daysAgo']}</td>
                             <td>${trend['30daysAgo']}</td>
                             <td>${trend['60daysAgo']}</td>
                             <td>${trend['90daysAgo']}</td>
-                            <td>${trend.current}</td>
                         </tr>`;
                 });
 
@@ -632,15 +632,15 @@ function loadAnalystEstimates(symbol) {
             // Display Growth Estimates
             const growthEstimates = data.growth_estimates;
             if (growthEstimates && Array.isArray(growthEstimates)) {
-                let growthHtml = '<table><thead><tr><th>Index Growth</th><th>Industry Growth</th><th>Sector Growth</th><th>Stock Growth</th></tr></thead><tbody>';
+                let growthHtml = '<table><thead><tr><th>Stock Growth</th><th>Index Growth</th><th>Industry Growth</th><th>Sector Growth</th></tr></thead><tbody>';
 
                 growthEstimates.forEach(estimate => {
                     growthHtml += `
             <tr>
+                <td>${(estimate.stock * 100).toFixed(2)}%</td> <!-- Convert to percentage -->
                 <td>${(estimate.index * 100).toFixed(2)}%</td> <!-- Convert to percentage -->
                 <td>${estimate.industry !== "N/A" ? estimate.industry : 'N/A'}</td>
                 <td>${estimate.sector !== "N/A" ? estimate.sector : 'N/A'}</td>
-                <td>${(estimate.stock * 100).toFixed(2)}%</td> <!-- Convert to percentage -->
             </tr>`;
                 });
 

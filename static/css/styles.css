@@ -23,6 +23,11 @@ body {
     color: #fff !important;
 }
 
+/* Show the dropdown menu on hover */
+.nav-item.dropdown:hover .dropdown-menu {
+    display: block;
+}
+
 .navbar-nav .nav-link {
     color: #ddd !important;
 }

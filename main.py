@@ -96,6 +96,9 @@ def fetch_stock_data(symbol):
         'fast_info': stock.fast_info,
         'dividends': stock.dividends
     }
+    print("Revenue Estimate", stock.revenue_estimate)
+    print("Earnings Estimate", stock.earnings_estimate)
+    print("analyst_price_targets", stock.analyst_price_targets)
     return data_cache[symbol]
 
 @app.route("/api/stock_data")
