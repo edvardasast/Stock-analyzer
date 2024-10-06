@@ -65,10 +65,23 @@ range_mapping = {
 def calculate_cagr(revenue_start, revenue_end, years):
     return ((revenue_end / revenue_start) ** (1 / years)) - 1
 
+@app.route('/api/renew_data_cache', methods=['POST'])
+def renew_data_cache():
+    try:
+        symbol = request.args.get('symbol').upper()
+        # Logic to renew data_cache
+        global data_cache
+        data_cache = {}  # Clear the existing cache
+        fetch_stock_data(symbol)  # Fetch data for AAPL to populate the cache
+        return jsonify({"success": True})
+    except Exception as e:
+        print("Error renewing data cache:", e)
+        return jsonify({"error": str(e)}), 500
+
 def fetch_stock_data(symbol):
     if symbol in data_cache:
         return data_cache[symbol]
-
+    print("Fully Fetching stock data...", symbol)
     stock = yf.Ticker(symbol)
     data_cache[symbol] = {
         'info': stock.info,
@@ -87,7 +100,8 @@ def fetch_stock_data(symbol):
         'recommendations_summary': stock.recommendations_summary,
         'upgrades_downgrades': stock.upgrades_downgrades,
         'news': stock.news,
-        'fast_info': stock.fast_info
+        'fast_info': stock.fast_info,
+        'dividends': stock.dividends
     }
     return data_cache[symbol]
 
@@ -107,7 +121,6 @@ def get_stock_data():
         balance_sheet = stock_data['balance_sheet']
         cash_flow_statement = stock_data['cash_flow']
         fast_info = stock_data['fast_info']
-        print("Fast info", fast_info)
         # Get the corresponding period for the selected range
         period = range_mapping.get(range_param, '5y')
 
@@ -593,6 +606,27 @@ def get_news():
         response_data = {
             "symbol": symbol,
             "news": news
+        }
+        return jsonify(response_data)
+    except Exception as e:
+        print("Error ", e)
+        return jsonify({"error": str(e)}), 400
+@app.route('/dividends')
+def dividends():
+    return render_template("dividends.html")
+@app.route('/api/dividends')
+def get_dividends():
+    print("Fetching dividends...")
+    symbol = request.args.get('symbol', 'AAPL').upper()  # Default to AAPL if no symbol provided
+    stock_data = fetch_stock_data(symbol)
+
+    try:
+        # Fetch dividends data
+        dividends = stock_data['dividends']
+        dividends_dict = {str(date): value for date, value in dividends.items()}
+        response_data = {
+            "symbol": symbol,
+            "dividends": dividends_dict
         }
         return jsonify(response_data)
     except Exception as e:

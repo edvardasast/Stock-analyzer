@@ -13,7 +13,18 @@ document.getElementById("load-metrics").addEventListener("click", function () {
     if (stockSymbol) {
         // Save stock symbol to cookies for 7 days
         setCookie('stockSymbol', stockSymbol.toUpperCase(), 7);
-
+        fetch(`/api/renew_data_cache?symbol=${stockSymbol}`, { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Data cache renewed successfully');
+            } else {
+                console.error('Error renewing data cache:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error renewing data cache:', error);
+        });
         // Redirect to the Metrics page with the stock symbol
         window.location.href = `/stock_data`;
     } else {
@@ -42,7 +53,6 @@ function fetchStockData(symbol) {
                 alert(data.error);
                 return;
             }
-            console.log(data)
             const element = document.getElementById('market-cap');
             if (element) {
                 // Safe to manipulate the element
@@ -710,10 +720,60 @@ function loadNews() {
         });
 }
 
-// Call this function when the page loads with the stock symbol
-document.addEventListener("DOMContentLoaded", function () {
+function loadDividends() {
+    const symbol = getCookie('stockSymbol');  // Fetch from cookies
+    fetch(`/api/dividends?symbol=${symbol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error fetching dividends data:', data.error);
+                const dividendsContainer = document.getElementById('dividends-container');
+                if (dividendsContainer) {
+                    dividendsContainer.innerHTML = `<p>Error: ${data.error}</p>`;
+                }
+                return;
+            }
+
+            const dividends = data.dividends;
+            const labels = Object.keys(dividends).map(date => new Date(date).toLocaleDateString());
+            const values = Object.values(dividends);
+
+            const ctx = document.getElementById('dividends-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Dividends',
+                        data: values,
+                        backgroundColor: 'rgba(21, 88, 38, 1)',
+                        bortedcolor: 'rgba(21, 150, 38, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching dividends data:', error);
+            const dividendsContainer = document.getElementById('dividends-container');
+            if (dividendsContainer) {
+                dividendsContainer.innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const currentUrl = window.location.href;
     const stockSymbol = getCookie('stockSymbol');  // Fetch from cookies
     console.log(stockSymbol)
+    fetchStockData(stockSymbol); // Fetch stock data
     if (document.getElementById('symbol-name')) {
         // Safe to manipulate the element
         document.getElementById('symbol-name').textContent = stockSymbol;
@@ -726,13 +786,28 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
         //console.error('Element with id "cash-flow" not found.');
     }
-
-    fetchStockData(stockSymbol); // Fetch stock data
-    loadIncomeStatement(stockSymbol);   // Load income statement data
-    loadBalanceSheet(stockSymbol); // Load balance sheet data
-    loadCashFlow(stockSymbol); // Load cash flow data
-    loadEightPillars(stockSymbol);  // Load 8 Pillars data
-    loadAnalystEstimates(stockSymbol); // Load analyst estimates
-    loadRecommendations(stockSymbol); // Load stock recommendations
-    loadNews(); // Load news articles
+    if (currentUrl.includes('/dividends')) {
+        loadDividends();
+    }
+    else if (currentUrl.includes('/news')) {
+        loadNews(); // Load news articles
+    }
+    else if (currentUrl.includes('/recomendations')) {
+        loadRecommendations(stockSymbol); // Load stock recommendations
+    }
+    else if (currentUrl.includes('/analyst_estimates')) {
+        loadAnalystEstimates(stockSymbol); // Load analyst estimates
+    }
+    else if (currentUrl.includes('/8pillars')) {
+        loadEightPillars(stockSymbol);  // Load 8 Pillars data
+    }
+    else if (currentUrl.includes('/cash_flow')) {
+        loadCashFlow(stockSymbol); // Load cash flow data
+    }
+    else if (currentUrl.includes('/balance_sheet')) {
+        loadBalanceSheet(stockSymbol); // Load balance sheet data
+    }
+    else if (currentUrl.includes('/income_statement')) {
+        loadIncomeStatement(stockSymbol);   // Load income statement data
+    }
 });
