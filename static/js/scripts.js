@@ -1,5 +1,7 @@
 let chart;  // Declare chart globally
 let symbol = ''
+let range = 'YTD'
+let upgradesDowngradesData = [];
 function setCookie(name, value, days) {
     const date = new Date();
     date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000)); // Set expiration date
@@ -14,17 +16,17 @@ document.getElementById("load-metrics").addEventListener("click", function () {
         // Save stock symbol to cookies for 7 days
         setCookie('stockSymbol', stockSymbol.toUpperCase(), 7);
         fetch(`/api/renew_data_cache?symbol=${stockSymbol}`, { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log('Data cache renewed successfully');
-            } else {
-                console.error('Error renewing data cache:', data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error renewing data cache:', error);
-        });
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Data cache renewed successfully');
+                } else {
+                    console.error('Error renewing data cache:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error renewing data cache:', error);
+            });
         // Redirect to the Metrics page with the stock symbol
         window.location.href = `/stock_data`;
     } else {
@@ -46,7 +48,7 @@ function getCookie(name) {
 
 function fetchStockData(symbol) {
 
-    fetch(`/api/stock_data?symbol=${symbol}`)
+    fetch(`/api/stock_data?symbol=${symbol}&range=${range}`)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
@@ -82,10 +84,10 @@ function fetchStockData(symbol) {
                 //Company Name and Description
                 document.getElementById("company_description").textContent = data.company_description;
                 document.getElementById("company_name").textContent = data.company_name;
-                
+
 
                 // Set company information
-                document.getElementById("c-name").textContent =  data.company_name;
+                document.getElementById("c-name").textContent = data.company_name;
                 document.getElementById('currency-info').textContent = `Currency in ${data.currency}`;
                 document.getElementById('current-price').textContent = `$${data.current_price}`;
                 document.getElementById('price-change').textContent = `${data.price_change_percentage > 0 ? '\u2191' : '\u2193'} $${data.price_change} (${data.price_change_percentage}%)`;
@@ -106,8 +108,8 @@ function fetchStockData(symbol) {
                 //console.error('Element with id "metrics elements not found" not found.');
             }
             // Find and pass the 5Yr button by its ID to updateChart function
-            const fiveYearButton = document.getElementById('fiveYearBtn');
-            updateChart("5Y", fiveYearButton, symbol);
+            
+            //updateChart("YTD", ytdButton, []);
         })
         .catch(error => console.error("Error fetching data:", error));
 }
@@ -122,8 +124,10 @@ function loadRecommendations(symbol) {
                 document.getElementById('recommendations').innerHTML = `<p>Error: ${data.error}</p>`;
                 return;
             }
-
-            // Display Symbol
+            //Update chart
+            upgradesDowngradesData = data.upgrades_downgrades;
+            const ytdButton = document.getElementById('ytdBtn');
+            updateChart(range, ytdButton, upgradesDowngradesData);
             document.getElementById('symbol-name').textContent = symbol;
 
             // Display Recommendations Summary
@@ -172,14 +176,14 @@ function loadRecommendations(symbol) {
             // Display Upgrades/Downgrades
             const upgradesDowngrades = data.upgrades_downgrades;
             if (upgradesDowngrades && upgradesDowngrades.length > 0) {
-                let upgradesHtml = '<table><thead><tr><th>Date</th><th>Firm</th><th>To Grade</th><th>From Grade</th><th>Action</th></tr></thead><tbody>';
+                let upgradesHtml = '<table><thead><tr><th>Date</th><th>Firm</th><th>From Grade</th><th>To Grade</th><th>Action</th></tr></thead><tbody>';
                 upgradesDowngrades.forEach(upgrade => {
                     upgradesHtml += `
                         <tr>
                             <td>${new Date(upgrade.GradeDate).toLocaleDateString()}</td>
                             <td>${upgrade.Firm}</td>
-                            <td>${upgrade.ToGrade}</td>
                             <td>${upgrade.FromGrade}</td>
+                            <td>${upgrade.ToGrade}</td>
                             <td>${upgrade.Action}</td>
                         </tr>`;
                 });
@@ -195,9 +199,10 @@ function loadRecommendations(symbol) {
         });
 }
 
-
-function updateChart(range, button) {
+function updateChart(range, button, upgradesDowngradesData) {
+    console.log("Update Chart")
     const stockSymbol = getCookie('stockSymbol');
+    //const ytdButton = document.getElementById('ytdBtn');
     if (button) {
         // Remove 'active' class from all buttons
         const buttons = document.querySelectorAll('#timeRangeButtons .btn');
@@ -250,9 +255,79 @@ function updateChart(range, button) {
                     },
                     plugins: {
                         tooltip: {
-                            mode: 'nearest',  // Shows tooltip for nearest data point
-                            intersect: false  // Show tooltip even if not hovering directly on point
-                        }
+                            mode: 'nearest',
+                            intersect: false
+                        },
+                        annotation: {
+                            annotations: (upgradesDowngradesData && upgradesDowngradesData.length > 0) 
+                                ? upgradesDowngradesData.map((event, index) => {
+                                    const xValue = event.GradeDate;
+                                    const yValue = findPriceForDate(event.GradeDate, data["price_chart"]);
+                        
+                                    // Log the x and y values to the console for debugging
+                                    console.log(`Point Annotation ${index}: xValue = ${xValue}, yValue = ${yValue}`);
+                        
+                                    // Define colors based on the event action
+                                    let pointColor, borderColor, labelBackgroundColor;
+                                    switch (event.Action.toLowerCase()) {
+                                        case 'up':
+                                            pointColor = 'rgba(0, 128, 0, 1)'; // Green for upgrades
+                                            borderColor = 'rgba(0, 128, 0, 1)';
+                                            labelBackgroundColor = 'rgba(0, 128, 0, 0.8)';
+                                            break;
+                                        case 'strong-buy':
+                                            pointColor = 'rgba(0, 128, 0, 1)'; // Green for upgrades
+                                            borderColor = 'rgba(0, 128, 0, 1)';
+                                            labelBackgroundColor = 'rgba(0, 128, 0, 0.8)';
+                                            break;
+                                        case 'down':
+                                            pointColor = 'rgba(255, 0, 0, 1)'; // Red for downgrades
+                                            borderColor = 'rgba(255, 0, 0, 1)';
+                                            labelBackgroundColor = 'rgba(255, 0, 0, 0.8)';
+                                            break;
+                                        case 'sell':
+                                            pointColor = 'rgba(255, 0, 0, 1)'; // Red for downgrades
+                                            borderColor = 'rgba(255, 0, 0, 1)';
+                                            labelBackgroundColor = 'rgba(255, 0, 0, 0.8)';
+                                            break;
+                                        case 'main':
+                                            pointColor = 'rgba(255, 165, 0, 1)'; // Orange for maintaining the rating
+                                            borderColor = 'rgba(255, 165, 0, 1)';
+                                            labelBackgroundColor = 'rgba(255, 165, 0, 0.8)';
+                                            break;
+                                        case 'reit':
+                                            pointColor = 'rgba(255, 165, 0, 1)'; // Orange for maintaining the rating
+                                            borderColor = 'rgba(255, 165, 0, 1)';
+                                            labelBackgroundColor = 'rgba(255, 165, 0, 0.8)';
+                                            break;
+                                        default:
+                                            pointColor = 'rgba(128, 128, 128, 1)'; // Gray for unknown actions
+                                            borderColor = 'rgba(128, 128, 128, 1)';
+                                            labelBackgroundColor = 'rgba(128, 128, 128, 0.8)';
+                                            break;
+                                    }
+                        
+                                    return {
+                                        type: 'point',
+                                        xValue: xValue,
+                                        yValue: yValue,
+                                        backgroundColor: pointColor, // Use the dynamic color for the point marker
+                                        radius: 5, // Size of the point
+                                        borderColor: borderColor,
+                                        borderWidth: 2,
+                                        label: {
+                                            content: `${event.Firm}: ${event.ToGrade} from ${event.FromGrade}`,
+                                            enabled: true,
+                                            position: 'top',
+                                            backgroundColor: labelBackgroundColor, // Use the dynamic color for the label
+                                            font: {
+                                                size: 10,
+                                            },
+                                        }
+                                    };
+                                }) 
+                                : [] // Fallback to an empty array if recommendations.upgrades_downgrades is null or empty
+                        }                        
                     },
                     scales: {
                         x: {
@@ -282,7 +357,10 @@ function updateChart(range, button) {
         })
         .catch(error => console.error("Error fetching data:", error));
 }
-
+function findPriceForDate(date, priceChart) {
+    const index = priceChart.dates.indexOf(date);
+    return index !== -1 ? priceChart.prices[index] : null;
+}
 // Function to fetch and display income statement data
 function loadIncomeStatement(symbol) {
     fetch(`/api/income_statement?symbol=${symbol}`)
@@ -670,7 +748,7 @@ function loadAnnualReports(stockSymbol) {
                     annualReportsButton.target = '_blank';  // Open the link in a new tab
                     console.log(`Annual reports link set to: ${data.link}`);
                 }
-                }
+            }
         })
         .catch(error => {
             console.error('Error fetching AI opinion:', error);
@@ -796,11 +874,11 @@ function loadDividends() {
         });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const currentUrl = window.location.href;
     const stockSymbol = getCookie('stockSymbol');  // Fetch from cookies
     console.log(stockSymbol)
-    fetchStockData(stockSymbol); // Fetch stock data
+    //fetchStockData(stockSymbol); // Fetch stock data
     if (document.getElementById('symbol-name')) {
         // Safe to manipulate the element
         document.getElementById('symbol-name').textContent = stockSymbol;
@@ -838,6 +916,9 @@ document.addEventListener('DOMContentLoaded', function() {
         loadIncomeStatement(stockSymbol);   // Load income statement data
     }
     else if (currentUrl.includes('/stock_data')) {
+        fetchStockData(stockSymbol); // Fetch stock data
+        const ytdButton = document.getElementById('ytdBtn');
+        updateChart(range, ytdButton, []);
         loadAnnualReports(stockSymbol);  // Load Annual Reports opinion
     }
 });

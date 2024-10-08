@@ -1,19 +1,21 @@
 <!-- Include Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+
 
 <!-- Chart with Filters for Time Ranges -->
 <div class="chart-container my-4">
     <div class="btn-group" role="group" aria-label="Time Range" id="timeRangeButtons">
-        <button type="button" class="btn btn-secondary" onclick="updateChart('1W', this)">1W</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('1M', this)">1M</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('3M', this)">3M</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('6M', this)">6M</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('YTD', this)">YTD</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('1Y', this)">1Y</button>
-        <button id="fiveYearBtn" type="button" class="btn btn-secondary" onclick="updateChart('5Y', this)">5Y</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('10Y', this)">10Y</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('MAX', this)">MAX</button>
+        <button type="button" class="btn btn-secondary" onclick="updateChart('1W', this, upgradesDowngradesData)">1W</button>
+        <button type="button" class="btn btn-secondary" onclick="updateChart('1M', this, upgradesDowngradesData)">1M</button>
+        <button type="button" class="btn btn-secondary" onclick="updateChart('3M', this, upgradesDowngradesData)">3M</button>
+        <button type="button" class="btn btn-secondary" onclick="updateChart('6M', this, upgradesDowngradesData)">6M</button>
+        <button id="ytdBtn"  type="button" class="btn btn-secondary" onclick="updateChart('YTD', this, upgradesDowngradesData)">YTD</button>
+        <button type="button" class="btn btn-secondary" onclick="updateChart('1Y', this, upgradesDowngradesData)">1Y</button>
+        <button id="fiveYearBtn" type="button" class="btn btn-secondary" onclick="updateChart('5Y', this, upgradesDowngradesData)">5Y</button>
+        <button type="button" class="btn btn-secondary" onclick="updateChart('10Y', this, upgradesDowngradesData)">10Y</button>
+        <button type="button" class="btn btn-secondary" onclick="updateChart('MAX', this, upgradesDowngradesData)">MAX</button>
     </div>
     <canvas id="priceChart"></canvas>
 </div>

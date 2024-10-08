@@ -96,16 +96,16 @@ def fetch_stock_data(symbol):
         'fast_info': stock.fast_info,
         'dividends': stock.dividends
     }
-    print("Revenue Estimate", stock.revenue_estimate)
-    print("Earnings Estimate", stock.earnings_estimate)
-    print("analyst_price_targets", stock.analyst_price_targets)
+    #print("Revenue Estimate", stock.revenue_estimate)
+    #print("Earnings Estimate", stock.earnings_estimate)
+    #print("analyst_price_targets", stock.analyst_price_targets)
     return data_cache[symbol]
 
 @app.route("/api/stock_data")
 def get_stock_data():
     symbol = request.args.get('symbol').upper()
     print("Fetching stock data...", symbol)
-    range_param = request.args.get('range', '5Y')  # Default to 5Y if no range is provided
+    range_param = request.args.get('range', 'YTD')  # Default to 5Y if no range is provided
 
     if not symbol:
         return jsonify({"error": "Stock symbol is required"}), 400
@@ -118,7 +118,7 @@ def get_stock_data():
         cash_flow_statement = stock_data['cash_flow']
         fast_info = stock_data['fast_info']
         # Get the corresponding period for the selected range
-        period = range_mapping.get(range_param, '5y')
+        period = range_mapping.get(range_param, 'YTD')
 
         # Extract net income and total revenue for the last 4 years
         net_incomes = financials.loc['Net Income'].values[:4]  # Net Income in USD
@@ -157,8 +157,10 @@ def get_stock_data():
         free_cash_flows_billion = [round(fcf / 1e9, 2) for fcf in free_cash_flows]  # Convert to billions
 
         # Dividends Paid
-        dividend_paid = abs(cash_flow_statement.loc['Cash Dividends Paid'].values[0])
-
+        if 'Cash Dividends Paid' in cash_flow_statement.index:
+            dividend_paid = abs(cash_flow_statement.loc['Cash Dividends Paid'].values[0])
+        else:
+            dividend_paid = 0
         # Calculate the 4-year average free cash flow
         avg_free_cash_flow = round(sum(free_cash_flows_billion) / len(free_cash_flows_billion), 2)
 
@@ -550,7 +552,7 @@ def get_ai_opinion():
             f"You are a professional financial analyst and stocks trader. "
             f"Based on the following financial data for ({symbol}), provide a detailed financial analysis "
             f"and investment recommendation. Include discussions on its financial health, market position, growth prospects, "
-            f"and any potential risks.\n\n"
+            f"and any potential risks.When you provide multibagger potential calculate it for the 2 following years\n\n"
             f"Key Financial Metrics:\n"
             f"{prompt}"
         )
