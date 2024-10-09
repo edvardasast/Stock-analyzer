@@ -7,6 +7,8 @@ import tempfile
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+from utils.gov_scraper import get_gov_yearly_report
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -70,7 +72,6 @@ def renew_data_cache():
     except Exception as e:
         print("Error renewing data cache:", e)
         return jsonify({"error": str(e)}), 500
-
 def fetch_stock_data(symbol):
     if symbol in data_cache:
         return data_cache[symbol]
@@ -79,8 +80,15 @@ def fetch_stock_data(symbol):
     data_cache[symbol] = {
         'info': stock.info,
         'financials': stock.financials,
+        'quarterly_financials': stock.quarterly_financials,
         'balance_sheet': stock.balance_sheet,
+        'quarterly_balance_sheet': stock.quarterly_balance_sheet,
         'cash_flow': stock.cashflow,
+        'quarterly_cash_flow': stock.quarterly_cashflow,
+        'earnings': stock.earnings,
+        'quarterly_earnings': stock.quarterly_earnings,
+        'income_stmt': stock.financials,
+        'quarterly_income_stmt': stock.quarterly_financials,
         'history': stock.history(period='5Y'),
         'analyst_price_targets': stock.analyst_price_targets,
         'earnings_estimate': stock.earnings_estimate,
@@ -99,6 +107,8 @@ def fetch_stock_data(symbol):
     #print("Revenue Estimate", stock.revenue_estimate)
     #print("Earnings Estimate", stock.earnings_estimate)
     #print("analyst_price_targets", stock.analyst_price_targets)
+    gov_link = get_gov_yearly_report(symbol)
+    print(gov_link)
     return data_cache[symbol]
 
 @app.route("/api/stock_data")
@@ -539,6 +549,11 @@ def get_ai_opinion():
         balance_sheet = stock_data.get('balance_sheet', {})
         cash_flow = stock_data.get('cash_flow', {})
         stock_info = stock_data.get('stock_info', {})
+        quarterly_cash_flow = stock_data.get('quarterly_cash_flow', {})
+        quarterly_income_stmt = stock_data.get('quarterly_income_stmt', {})
+        quarterly_balance_sheet = stock_data.get('quarterly_balance_sheet', {})
+        quarterly_earnings = stock_data.get('quarterly_earnings', {})
+        quarterly_financials = stock_data.get('quarterly_financials', {})
 
         # Prepare data to send to OpenAI
         prompt = (
@@ -546,6 +561,11 @@ def get_ai_opinion():
             f"Balance Sheet: {balance_sheet}\n"
             f"Cash Flow: {cash_flow}\n"
             f"Stock Info: {stock_info}\n"
+            f"Quarterly cash flow: {quarterly_cash_flow}\n"
+            f"Quarterly income statement: {quarterly_income_stmt}\n"
+            f"Quarterly balance sheet: {quarterly_balance_sheet}\n"
+            f"Quarterly earnings: {quarterly_earnings}\n"
+            f"Quarterly financials: {quarterly_financials}\n"
         )
 
         system_message = (
