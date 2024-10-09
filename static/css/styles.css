@@ -401,3 +401,64 @@ canvas {
 .change.negative {
     color: #ff4c4c;
 }
+
+/* Hide AI response sections initially */
+.section {
+    margin-bottom: 20px;
+    display: none; /* Hide sections initially */
+}
+.section h2 {
+    margin-bottom: 10px;
+}
+.section p {
+    margin: 5px 0;
+}
+.spinner {
+    border: 8px solid #f3f3f3; /* Light grey */
+    border-top: 8px solid #007bff; /* Blue */
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 2s linear infinite;
+    margin: 20px auto; /* Center the spinner */
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Center loading container horizontally */
+.loading-container {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px; /* Add some top margin if needed */
+}
+/* Checkbox container styles */
+.checkbox-container {
+    margin-bottom: 20px;
+    align-items: center;
+    justify-content: center;
+}
+.checkbox-container label {
+    margin-right: 15px;
+}
+
+/* Styled dropdown */
+.styled-dropdown {
+    width: 30%;
+    padding: 3px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="gray" class="bi bi-chevron-down" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px 16px;
+}

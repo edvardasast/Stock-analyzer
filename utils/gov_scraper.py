@@ -1,37 +1,94 @@
-import requests
 from bs4 import BeautifulSoup
+from sec_downloader import Downloader
+from sec_downloader.types import RequestedFilings
+import nltk
+from openai import OpenAI
+from nltk.tokenize import word_tokenize
+import os
+from dotenv import load_dotenv
+# Load environment variables from .env file
+load_dotenv()
+# Ensure you have downloaded the necessary NLTK data files
+nltk.download('punkt_tab')
 
-def get_gov_yearly_report(symbol):
-    sec_url = f'https://efts.sec.gov/LATEST/search-index?keysTyped={symbol}'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'Accept-Language': 'en-US,en;q=0.9,lt-LT;q=0.8,lt;q=0.7,de-DE;q=0.6,de;q=0.5,ru-RU;q=0.4,ru;q=0.3,es-ES;q=0.2,es;q=0.1,zh-MO;q=0.1,zh;q=0.1',
-        'Cache-Control': 'max-age=0'
+def get_yearly_report(symbol,model):
+    dl = Downloader("Info Company", "info@gmail.com")
+    ten_k_dokument = ''
+    ten_k = dl.get_filing_metadatas(
+    RequestedFilings(ticker_or_cik=symbol, form_type="10-K", limit=1)
+    )
+    for metadata in ten_k:
+            html = dl.download_filing(url=metadata.primary_doc_url).decode()
+           # Extract text data from the HTML content
+            soup = BeautifulSoup(html, 'html.parser')
+            # Extract relevant sections (example: sections with financial data)
+            relevant_sections = soup.find_all(['h1', 'h2', 'h3', 'p', 'table'])
+            text = "\n".join([section.get_text(separator='\n', strip=True) for section in relevant_sections])
+            # Remove empty lines
+            text = "\n".join([line for line in text.splitlines() if line.strip() != ""])
+            tokens = word_tokenize(text)
+            tokenized_text = " ".join(tokens)
+            ten_k_dokument = get_ai_summary(tokenized_text,symbol,"10-K",model)
+    reports = {
+        '10K': ten_k_dokument
     }
-    response = requests.get(sec_url, headers=headers)
-    response.raise_for_status()
-    data = response.json()
-    # Extract _id from response
-    _id = data['hits']['hits'][0]['_id']
-    sec_link = f'https://www.sec.gov/edgar/browse/?CIK={_id}'
-    print(f"SEC link: {sec_link}")
-    # Step 1: Send a GET request to the sec_link
-    response = requests.get(sec_link, headers=headers)
-    print(response)
-    # Step 2: Parse the HTML content
-    soup = BeautifulSoup(response.content, 'html.parser')
-    # Step 3: Find the link to the 10-K annual report
-    # This assumes that the link has the text '10-K'. Modify this as needed.
-    annual_report_link = soup.find('a', text='10-K')
-    if annual_report_link is not None:
-        annual_report_href = annual_report_link['href']
-        print(f"10-K annual report link found: {annual_report_href}")
-    #https://www.sec.gov/ix?doc=/Archives/edgar/data/789019/000095017024087843/msft-20240630.htm
-    else:
-        print("10-K annual report link not found")
-        return annual_report_href
-    
+    return reports
+def get_quarterly_report(symbol,model):
+    dl = Downloader("Info Company", "info@gmail.com")
+    ten_q_documents = []
+    ten_q = dl.get_filing_metadatas(
+    RequestedFilings(ticker_or_cik=symbol, form_type="10-Q", limit=4)
+    )  
+    for idx, metadata in enumerate(ten_q):
+            html = dl.download_filing(url=metadata.primary_doc_url).decode()
+           # Extract text data from the HTML content
+            soup = BeautifulSoup(html, 'html.parser')
+            # Extract relevant sections (example: sections with financial data)
+            relevant_sections = soup.find_all(['h1', 'h2', 'h3', 'p', 'table'])
+            text = "\n".join([section.get_text(separator='\n', strip=True) for section in relevant_sections])
+            # Remove empty lines
+            text = "\n".join([line for line in text.splitlines() if line.strip() != ""])
+             # Tokenize the text
+            tokens = word_tokenize(text)
+            tokenized_text = " ".join(tokens)
+            ten_q_documents.append(get_ai_summary(tokenized_text,symbol,"10-Q",model))
+            
+    reports = {
+        '10Q': ten_q_documents
+    }
+    return reports
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable not set")
+client = OpenAI(
+  api_key=OPENAI_API_KEY,  # this is also the default, it can be omitted
+)
+def get_ai_summary(prompt, symbol, type, model):
+      # Call the OpenAI API for chat models
+        system_message = (
+            f"You are a professional financial analyst and stocks trader. "
+            f"Based on the following financial {type} form for ({symbol}), provide a detailed summary"
+            f"{prompt}"
+        )
+        user_message = (
+            f"Your response must be minimum 10000 tokens length and should include all key information. Financial data are not required to be included in the summary."
+        )
+        response = client.chat.completions.create(
+            model=model,  # Ensure the correct chat model is used
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=10000,
+            temperature=0,
+            n=1,
+        )
+        # Extract token usage information
+        prompt_tokens = response.usage.prompt_tokens
+        completion_tokens = response.usage.completion_tokens
+        total_tokens = response.usage.total_tokens
+        print(f"{type} Tokens used: Prompt tokens: {prompt_tokens} Completion tokens: {completion_tokens} Total: {total_tokens}")
 
-    
+        # Access the response
+        summary = response.choices[0].message.content.strip()
+        return summary

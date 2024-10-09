@@ -7,7 +7,8 @@ import tempfile
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
-from utils.gov_scraper import get_gov_yearly_report
+from utils.gov_scraper import get_yearly_report, get_quarterly_report
+from utils.news_downloader import download_news
 
 
 # Load environment variables from .env file
@@ -85,8 +86,8 @@ def fetch_stock_data(symbol):
         'quarterly_balance_sheet': stock.quarterly_balance_sheet,
         'cash_flow': stock.cashflow,
         'quarterly_cash_flow': stock.quarterly_cashflow,
-        'earnings': stock.earnings,
-        'quarterly_earnings': stock.quarterly_earnings,
+        #'earnings': stock.earnings,
+        #'quarterly_earnings': stock.quarterly_earnings,
         'income_stmt': stock.financials,
         'quarterly_income_stmt': stock.quarterly_financials,
         'history': stock.history(period='5Y'),
@@ -104,11 +105,8 @@ def fetch_stock_data(symbol):
         'fast_info': stock.fast_info,
         'dividends': stock.dividends
     }
-    #print("Revenue Estimate", stock.revenue_estimate)
-    #print("Earnings Estimate", stock.earnings_estimate)
-    #print("analyst_price_targets", stock.analyst_price_targets)
-    gov_link = get_gov_yearly_report(symbol)
-    print(gov_link)
+    download_news(symbol,stock.news,'gpt-4o-mini-2024-07-18')
+    #print("News",stock.news)
     return data_cache[symbol]
 
 @app.route("/api/stock_data")
@@ -542,57 +540,98 @@ def ai_opinion():
 def get_ai_opinion():
     symbol = request.args.get('symbol', 'AAPL').upper()  # Default to AAPL if no symbol provided
     stock_data = fetch_stock_data(symbol)
-
+    include_financial_data = request.args.get('financial_data', 'true').lower() == 'true'
+    include_yearly_reports = request.args.get('yearly_reports', 'true').lower() == 'true'
+    include_quarterly_reports = request.args.get('quarterly_reports', 'true').lower() == 'true'
+    include_news = request.args.get('news', 'true').lower() == 'true'
+    gpt_model = request.args.get('gpt_model', 'gpt-4o-mini-2024-07-18')
     try:
         # Fetch necessary stock data
-        financials = stock_data.get('financials', {})
-        balance_sheet = stock_data.get('balance_sheet', {})
-        cash_flow = stock_data.get('cash_flow', {})
         stock_info = stock_data.get('stock_info', {})
-        quarterly_cash_flow = stock_data.get('quarterly_cash_flow', {})
-        quarterly_income_stmt = stock_data.get('quarterly_income_stmt', {})
-        quarterly_balance_sheet = stock_data.get('quarterly_balance_sheet', {})
-        quarterly_earnings = stock_data.get('quarterly_earnings', {})
-        quarterly_financials = stock_data.get('quarterly_financials', {})
-
-        # Prepare data to send to OpenAI
+         # Prepare data to send to OpenAI
         prompt = (
-            f"Financials: {financials}\n"
-            f"Balance Sheet: {balance_sheet}\n"
-            f"Cash Flow: {cash_flow}\n"
             f"Stock Info: {stock_info}\n"
-            f"Quarterly cash flow: {quarterly_cash_flow}\n"
-            f"Quarterly income statement: {quarterly_income_stmt}\n"
-            f"Quarterly balance sheet: {quarterly_balance_sheet}\n"
-            f"Quarterly earnings: {quarterly_earnings}\n"
-            f"Quarterly financials: {quarterly_financials}\n"
         )
+        if include_financial_data:
+            financials = stock_data.get('financials', {})
+            balance_sheet = stock_data.get('balance_sheet', {})
+            cash_flow = stock_data.get('cash_flow', {})
+            quarterly_cash_flow = stock_data.get('quarterly_cash_flow', {})
+            quarterly_income_stmt = stock_data.get('quarterly_income_stmt', {})
+            quarterly_balance_sheet = stock_data.get('quarterly_balance_sheet', {})
+            #quarterly_earnings = stock_data.get('quarterly_earnings', {})
+            quarterly_financials = stock_data.get('quarterly_financials', {})
+        if include_yearly_reports:
+            ten_k = get_yearly_report(symbol,gpt_model)
+            prompt += (
+                f"10-K: {ten_k}\n"
+            )
+        if include_quarterly_reports:
+            ten_q = get_quarterly_report(symbol,gpt_model)
+            prompt += (
+                f"10-Q: {ten_q}\n"
+            )
+        if include_news:
+            news = stock_data.get('news', {})
+            news = download_news(symbol, news, gpt_model)
+            prompt += (
+                f"News: {news}\n"
+            )
+
+        if include_financial_data:
+            prompt += (
+                f"Financials: {financials}\n"
+                f"Balance Sheet: {balance_sheet}\n"
+                f"Cash Flow: {cash_flow}\n"
+                f"Quarterly cash flow: {quarterly_cash_flow}\n"
+                f"Quarterly income statement: {quarterly_income_stmt}\n"
+                f"Quarterly balance sheet: {quarterly_balance_sheet}\n"
+                #f"Quarterly earnings: {quarterly_earnings}\n"
+                f"Quarterly financials: {quarterly_financials}\n"
+            )
 
         system_message = (
             f"You are a professional financial analyst and stocks trader. "
             f"Based on the following financial data for ({symbol}), provide a detailed financial analysis "
             f"and investment recommendation. Include discussions on its financial health, market position, growth prospects, "
-            f"and any potential risks.When you provide multibagger potential calculate it for the 2 following years\n\n"
+            f"and any potential risks.\n\n"
             f"Key Financial Metrics:\n"
             f"{prompt}"
         )
         user_message = (
-            f"Provide short view about company situation. "
-            f"Provide final decision in following format: ***Investment Attractiveness: 1/10 ***Multibagger Potential: 1/10 ***Shares: Overvalued/Undervalued. "
-            f"Your answer must fit into 150 words."
+            f"multibagger_potential growth_estimate must be for the next 12 months align it and not ovelap if Growth potential is < 100% multibagger cant be valuated high. Your answer must be in JSON format and structured as follows:\n"
+            f"{{"
+            f'  "company_situation": {{'
+            f'    "financial_health": "",'
+            f'    "market_position": "",'
+            f'    "growth_prospects": "",'
+            f'    "main_competitors": ""'
+            f'    "potential_oportunities": ""'
+            f'    "potential_risks": ""'
+            f'  }},'
+            f'  "investment_attractiveness": {{'
+            f'    "rating": 0-10,'
+            f'    "multibagger_potential": 0-10,'
+            f'    "growth_estimate": %'
+            f'    "shares_valuation": Overvalued/Undervalued'
+            f'  }}'
+            f'}}'
         )
 
         # Call the OpenAI API for chat models
         
         response = client.chat.completions.create(
-            model='gpt-4o',  # Ensure the correct chat model is used
+            model=gpt_model,  # Ensure the correct chat model is used
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message}
             ],
             max_tokens=1000,
-            temperature=0.7,
+            temperature=0,
             n=1,
+            response_format={
+                "type": "json_object"
+            },
         )
         # Extract token usage information
         prompt_tokens = response.usage.prompt_tokens
@@ -603,6 +642,7 @@ def get_ai_opinion():
         # Access the response
         ai_opinion = response.choices[0].message.content.strip().replace("***", "<br>")
         # Prepare response data
+        #print("AI Opinion ", ai_opinion)
         response_data = {
             "symbol": symbol,
             "ai_opinion": ai_opinion
@@ -681,7 +721,9 @@ def get_annualReports():
     except Exception as e:
         print("Error ", e)
         return jsonify({"error": str(e)}), 400
-    
+
+def get_yearly_reports():
+    return jsonify(get_gov_yearly_report(symbol))    
 
 if __name__ == "__main__":
     app.run(debug=True)

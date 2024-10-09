@@ -108,7 +108,7 @@ function fetchStockData(symbol) {
                 //console.error('Element with id "metrics elements not found" not found.');
             }
             // Find and pass the 5Yr button by its ID to updateChart function
-            
+
             //updateChart("YTD", ytdButton, []);
         })
         .catch(error => console.error("Error fetching data:", error));
@@ -259,14 +259,14 @@ function updateChart(range, button, upgradesDowngradesData) {
                             intersect: false
                         },
                         annotation: {
-                            annotations: (upgradesDowngradesData && upgradesDowngradesData.length > 0) 
+                            annotations: (upgradesDowngradesData && upgradesDowngradesData.length > 0)
                                 ? upgradesDowngradesData.map((event, index) => {
                                     const xValue = event.GradeDate;
                                     const yValue = findPriceForDate(event.GradeDate, data["price_chart"]);
-                        
+
                                     // Log the x and y values to the console for debugging
                                     console.log(`Point Annotation ${index}: xValue = ${xValue}, yValue = ${yValue}`);
-                        
+
                                     // Define colors based on the event action
                                     let pointColor, borderColor, labelBackgroundColor;
                                     switch (event.Action.toLowerCase()) {
@@ -306,7 +306,7 @@ function updateChart(range, button, upgradesDowngradesData) {
                                             labelBackgroundColor = 'rgba(128, 128, 128, 0.8)';
                                             break;
                                     }
-                        
+
                                     return {
                                         type: 'point',
                                         xValue: xValue,
@@ -325,9 +325,9 @@ function updateChart(range, button, upgradesDowngradesData) {
                                             },
                                         }
                                     };
-                                }) 
+                                })
                                 : [] // Fallback to an empty array if recommendations.upgrades_downgrades is null or empty
-                        }                        
+                        }
                     },
                     scales: {
                         x: {
@@ -758,20 +758,64 @@ function loadAnnualReports(stockSymbol) {
 
 // Function to fetch AI opinion and display it
 function loadAIOpinion(stockSymbol) {
-    fetch(`/api/ai_opinion?symbol=${stockSymbol}`)
+    document.getElementById('loading-container').style.display = 'flex';
+    // Get selected information
+    const includeFinancialData = document.getElementById('financial-data').checked;
+    const includeYearlyReports = document.getElementById('yearly-reports').checked;
+    const includeQuarterlyReports = document.getElementById('quarterly-reports').checked;
+    const includeNews = document.getElementById('news').checked;
+    const gptModel = document.getElementById('gpt-model').value;
+
+    // Create query parameters
+    const queryParams = new URLSearchParams({
+        symbol: stockSymbol,
+        financial_data: includeFinancialData,
+        yearly_reports: includeYearlyReports,
+        quarterly_reports: includeQuarterlyReports,
+        news: includeNews,
+        model: gptModel
+    });
+    fetch(`/api/ai_opinion?${queryParams.toString()}`)
         .then(response => response.json())
         .then(data => {
+            //console.log('API Response:', data); // Log the entire response object
             if (data.error) {
                 console.error('Error fetching AI opinion:', data.error);
-                document.getElementById('ai-opinion').innerHTML = `<p>Error: ${data.error}</p>`;
+                document.getElementById('financial-health').innerHTML = `<p>Error: ${data.error}</p>`;
             } else {
-                const aiOpinion = data.ai_opinion;
-                document.getElementById('ai-opinion').innerHTML = `<p>${aiOpinion}</p>`;
+                let aiOpinion;
+                try {
+                    aiOpinion = JSON.parse(data.ai_opinion);
+                } catch (e) {
+                    console.error('Error parsing ai_opinion:', e);
+                    document.getElementById('financial-health').innerHTML = `<p>Error: Invalid AI opinion format</p>`;
+                    return;
+                }
+                document.getElementById('loading-container').style.display = 'none';
+                document.getElementById('company-situation').style.display = 'block';
+                document.getElementById('investment-attractiveness').style.display = 'block';
+                // Check if company_situation and investment_attractiveness exist
+                if (aiOpinion.company_situation && aiOpinion.investment_attractiveness) {
+                    document.getElementById("financial-health").textContent = aiOpinion.company_situation.financial_health || 'N/A';
+                    document.getElementById("market-position").textContent = aiOpinion.company_situation.market_position || 'N/A';
+                    document.getElementById("growth-prospects").textContent = aiOpinion.company_situation.growth_prospects || 'N/A';
+                    document.getElementById("competitors").textContent = aiOpinion.company_situation.main_competitors || 'N/A';
+                    document.getElementById("potential_opportunities").textContent = aiOpinion.company_situation.potential_opportunities || 'N/A';
+                    document.getElementById("potential-risks").textContent = aiOpinion.company_situation.potential_risks || 'N/A';
+                    document.getElementById("rating").textContent = aiOpinion.investment_attractiveness.rating + "/10"|| 'N/A';
+                    document.getElementById("multibagger-potential").textContent = aiOpinion.investment_attractiveness.multibagger_potential + "/10" || 'N/A';
+                    document.getElementById("growth_potential").textContent = aiOpinion.investment_attractiveness.growth_estimate + '%' || 'N/A';
+                    document.getElementById("shares-valuation").textContent = aiOpinion.investment_attractiveness.shares_valuation || 'N/A';
+                } else {
+                    console.error('Unexpected response structure:', data);
+                    document.getElementById('financial-health').innerHTML = `<p>Error: Unexpected response structure</p>`;
+                }
+                //document.getElementById('ai-opinion').innerHTML = `<p>${aiOpinion}</p>`;
             }
         })
         .catch(error => {
             console.error('Error fetching AI opinion:', error);
-            document.getElementById('ai-opinion').innerHTML = `<p>Error: ${error.message}</p>`;
+            document.getElementById('financial-health').innerHTML = `<p>Error: ${error.message}</p>`;
         });
 }
 
