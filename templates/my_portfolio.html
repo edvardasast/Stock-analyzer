@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}
+Portfolio | Stock Analyzer
+{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+<div class="container">
+    <div class="portfolio-container">
+        <div class="portfolio-header">
+            <div class="header-row">
+                <div class="portfolio-value">
+                    <h2 id="total-portfolio-invested">$0.00</h2>
+                    <p>Invested</p>
+                </div>
+                <div class="portfolio-value">
+                    <h2 id="total-portfolio-value">$0.00</h2>
+                    <p>Current Value</p>
+                </div>
+                <div class="portfolio-value">
+                    <h2 id="portfolio-profit">$0.00</h2>
+                    <p>Profit</p>
+                </div>
+                <div class="upload-container">
+                    <button id="upload_statement" class="btn btn-secondary mt-3 upload_statement">
+                        <i class="fas fa-upload"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="portfolio-row">
+                <div class="portfolio-column holding-column">Stock</div>
+                <div class="portfolio-column">Invested</div>
+                <div class="portfolio-column">Current Value</div>
+                <div class="portfolio-column">Changes</div>
+                <div class="portfolio-column">Shares</div>
+                <div class="portfolio-column">Original Avg. Price</div>
+            </div>
+            <div id="portfolio-container" class="portfolio-container">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

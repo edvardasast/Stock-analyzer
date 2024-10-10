@@ -2,6 +2,7 @@ let chart;  // Declare chart globally
 let symbol = ''
 let range = 'YTD'
 let upgradesDowngradesData = [];
+let totalInvsted = 0;
 function setCookie(name, value, days) {
     const date = new Date();
     date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000)); // Set expiration date
@@ -9,30 +10,7 @@ function setCookie(name, value, days) {
     document.cookie = name + "=" + value + ";" + expires + ";path=/"; // Set cookie with expiration
 }
 
-document.getElementById("load-metrics").addEventListener("click", function () {
-    const stockSymbol = document.getElementById("stock-symbol").value.trim();
 
-    if (stockSymbol) {
-        // Save stock symbol to cookies for 7 days
-        setCookie('stockSymbol', stockSymbol.toUpperCase(), 7);
-        fetch(`/api/renew_data_cache?symbol=${stockSymbol}`, { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('Data cache renewed successfully');
-                } else {
-                    console.error('Error renewing data cache:', data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error renewing data cache:', error);
-            });
-        // Redirect to the Metrics page with the stock symbol
-        window.location.href = `/stock_data`;
-    } else {
-        alert("Please enter a valid stock symbol.");
-    }
-});
 
 function getCookie(name) {
     const decodedCookie = decodeURIComponent(document.cookie);
@@ -45,6 +23,160 @@ function getCookie(name) {
     }
     return "";
 }
+
+//Portfolio
+
+
+// Function to load the portfolio data
+function loadPortfolio() {
+    const portfolioContainer = document.getElementById('portfolio-container');
+    fetch('/api/portfolio')
+        .then(response => response.json())
+        .then(data => {
+            portfolioContainer.innerHTML = '';  // Clear any existing content
+            const portfolioItems = data;
+            let total_invested = 0;
+            let total_current = 0;
+            let totalPortfolioValue = 0;
+           
+
+
+            Object.entries(portfolioItems).forEach(([ticker, data]) => {
+                const portfolioItem = document.createElement('div');
+                portfolioItem.className = 'portfolio-item';
+                //console.log(`Data for ticker ${ticker}:`, data);
+                // Calculate invested amount
+                let investedAmount = 0;
+                let stocksAmount = 0;
+                if (Array.isArray(data)) {
+                    //console.log("Data is Array with length: " + data.length);
+                    data.forEach(event => {
+                        //console.log("Event: ", event); // Log the event object to see its structure
+                        if (event['Type'] === 'BUY' || event['Type'] === 'BUY - MARKET') {
+                            //console.log("BUY Event: ", event['Type']);
+                            investedAmount += parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
+                            stocksAmount += parseFloat(event['Quantity']);
+                        } else if (event['Type'] === 'STOCK SPLIT') {
+                            //console.log("Split Event: ", event['Type']);
+                            stocksAmount += parseFloat(event['Quantity']);
+                        } else if (event['Type'] === 'SELL' || event['Type'] === 'SELL - MARKET' || event['Type'] === 'MERGER - CASH') {
+                            //console.log("Sell Event: ", event['Type']);
+                            investedAmount -= parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
+                            stocksAmount -= parseFloat(event['Quantity']);
+                        } else if (event['Type'] === 'MERGER - STOCK') {
+                            //console.log("MERGER - STOCK: ", event['Type']);
+                            stocksAmount += parseFloat(event['Quantity']); stocksAmount += parseFloat(event['Quantity']);
+                        }
+                    });
+                    totalInvsted += parseFloat(investedAmount);
+                    //console.log("Invested Amount: ", investedAmount);
+                    //console.log("Stocks Amount: ", stocksAmount);
+                } else {
+                    console.log("Data is not an array or is undefined");
+                }
+                
+                if (stocksAmount > 0) {
+                    let ticker_name = ''
+                    let current_price = 0
+                    fetch(`/api/ticker_info?symbol=${ticker}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            //console.log(data);
+                            if (data.error) {
+                                console.error(`Error from API: ${data.error}`);
+                                return;
+                            }
+                            ticker_name = data.longName;
+                            //console.log(ticker_name);
+                            current_price = data.previousClose;
+                            //console.log(current_price);
+                            const currentValue = (stocksAmount * current_price).toFixed(2);
+                            totalPortfolioValue += parseFloat(currentValue);
+                            
+                            //console.log("Current val " + currentValue);
+                            const growthLoss = ((currentValue - investedAmount) / investedAmount * 100).toFixed(2);
+                            // Set company logo using favicon
+                            const companyWebsite = data.website;
+
+                            function loadLogo(companyWebsite, ticker, data) {
+                                let logoUrl = "";
+                                const logoImg = document.querySelector(`.company-logo-${ticker} img`);
+
+                                if (logoImg) {
+                                    if (companyWebsite) {
+                                        const logoUrlStart = `${companyWebsite}/favicon.ico`;
+                                        const img = new Image();
+                                        img.src = logoUrlStart;
+
+                                        img.onload = function () {
+                                            console.log("Logo is available for " + ticker);
+                                            // Logo is available
+                                            logoUrl = logoUrlStart;
+                                            logoImg.src = logoUrl;
+                                        };
+
+                                        img.onerror = function () {
+                                            console.log("Logo unavailable for " + ticker);
+                                            logoUrl = "/static/images/default.png";
+                                            logoImg.src = logoUrl;
+                                        };
+                                    } else {
+                                        logoUrl = "/static/images/default.png";
+                                        console.log("Logo unavailable for " + ticker);
+                                        logoImg.src = logoUrl;
+                                    }
+                                } else {
+                                    console.error(`Logo image element not found for ticker: ${ticker}`);
+                                }
+                            }
+                            // Determine classes based on values
+                            const currentValueClass = currentValue < investedAmount ? 'negative' : 'positive';
+                            const growthLossClass = growthLoss < 0 ? 'negative' : 'positive';
+
+                            
+                            const portfolioContent = `
+                                <div class="portfolio-item">
+                                    <div class="portfolio-row">
+                                        <div class="portfolio-column holding-column">
+                                                <div class="company-logo company-logo-${ticker}">
+                                                    <img src="/static/images/default.png" alt="${data.name} Logo">
+                                                </div>                                
+                                                <div class="portfolio-name">
+                                                    <h2>${ticker_name}</h2>
+                                                    <p>${ticker}</p>
+                                                </div>
+                                        </div>
+                                        <div class="portfolio-column">${investedAmount.toFixed(2)}</div>
+                                        <div class="portfolio-column ${currentValueClass}">${currentValue}</div>
+                                        <div class="portfolio-column ${growthLossClass}">${growthLoss}%</div>
+                                        <div class="portfolio-column">${stocksAmount.toFixed(2)}</div>
+                                        <div class="portfolio-column">${(investedAmount / stocksAmount).toFixed(2)}</div>
+                                    </div>
+                                </div>
+                            `;
+                            total_invested += investedAmount;
+                            total_current += currentValue;
+                            portfolioItem.innerHTML = portfolioContent;
+                            portfolioContainer.appendChild(portfolioItem);
+                            loadLogo(companyWebsite, ticker, data);
+                            // Update total portfolio value
+                            document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(2)}`;
+                            // Update total portfolio value
+                            document.getElementById('total-portfolio-invested').textContent = `$${totalInvsted.toFixed(2)}`;
+                            // Update total portfolio value
+                            portfolioProfit = totalPortfolioValue - totalInvsted;
+                            document.getElementById('portfolio-profit').textContent = `$${portfolioProfit.toFixed(2)}`;
+                        })
+                        
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching portfolio:', error);
+            portfolioContainer.innerHTML = '<p>Failed to load portfolio. Please try again later.</p>';
+        });
+}
+
 
 function fetchStockData(symbol) {
 
@@ -802,7 +934,7 @@ function loadAIOpinion(stockSymbol) {
                     document.getElementById("competitors").textContent = aiOpinion.company_situation.main_competitors || 'N/A';
                     document.getElementById("potential_opportunities").textContent = aiOpinion.company_situation.potential_opportunities || 'N/A';
                     document.getElementById("potential-risks").textContent = aiOpinion.company_situation.potential_risks || 'N/A';
-                    document.getElementById("rating").textContent = aiOpinion.investment_attractiveness.rating + "/10"|| 'N/A';
+                    document.getElementById("rating").textContent = aiOpinion.investment_attractiveness.rating + "/10" || 'N/A';
                     document.getElementById("multibagger-potential").textContent = aiOpinion.investment_attractiveness.multibagger_potential + "/10" || 'N/A';
                     document.getElementById("growth_potential").textContent = aiOpinion.investment_attractiveness.growth_estimate + '%' || 'N/A';
                     document.getElementById("shares-valuation").textContent = aiOpinion.investment_attractiveness.shares_valuation || 'N/A';
@@ -931,12 +1063,66 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (document.getElementById('stock-symbol')) {
         // Safe to manipulate the element
+        document.getElementById("load-metrics").addEventListener("click", function () {
+            const stockSymbol = document.getElementById("stock-symbol").value.trim();
+        
+            if (stockSymbol) {
+                // Save stock symbol to cookies for 7 days
+                setCookie('stockSymbol', stockSymbol.toUpperCase(), 7);
+                fetch(`/api/renew_data_cache?symbol=${stockSymbol}`, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            console.log('Data cache renewed successfully');
+                        } else {
+                            console.error('Error renewing data cache:', data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error renewing data cache:', error);
+                    });
+                // Redirect to the Metrics page with the stock symbol
+                window.location.href = `/stock_data`;
+            } else {
+                alert("Please enter a valid stock symbol.");
+            }
+        });
         document.getElementById('stock-symbol').value = stockSymbol;
     } else {
         //console.error('Element with id "cash-flow" not found.');
     }
     if (currentUrl.includes('/dividends')) {
         loadDividends();
+    }
+    else if (currentUrl.includes('/portfolio')) {
+        document.getElementById('upload_statement').addEventListener('click', function() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv';
+            input.onchange = function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+        
+                    fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            loadPortfolio(); // Refresh portfolio data
+                        } else {
+                            console.error('Error uploading file:', data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error uploading file:', error));
+                }
+            };
+            input.click();
+        });
+        loadPortfolio(); // Load portfolio
     }
     else if (currentUrl.includes('/news')) {
         loadNews(); // Load news articles

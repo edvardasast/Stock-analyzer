@@ -4,11 +4,15 @@ import requests
 import yfinance as yf
 import pandas as pd
 import tempfile
+import numpy as np  # Import numpy
+from werkzeug.utils import secure_filename
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+import json
 from utils.gov_scraper import get_yearly_report, get_quarterly_report
 from utils.news_downloader import download_news
+from utils.parse_statement import parse_statement
 
 
 # Load environment variables from .env file
@@ -16,13 +20,15 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
-
 # Configure session to use filesystem (instead of signed cookies)
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_FILE_DIR'] = tempfile.gettempdir()
 app.config['SESSION_PERMANENT'] = False  # Ensure sessions are not permanent
 Session(app)
-
+UPLOAD_FOLDER = 'data'
+DATA_FOLDER = 'data'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['DATA_FOLDER'] = DATA_FOLDER
 # Global cache to store yfinance data
 data_cache = {}
 
@@ -105,9 +111,77 @@ def fetch_stock_data(symbol):
         'fast_info': stock.fast_info,
         'dividends': stock.dividends
     }
-    download_news(symbol,stock.news,'gpt-4o-mini-2024-07-18')
+    #download_news(symbol,stock.news,'gpt-4o-mini-2024-07-18')
     #print("News",stock.news)
     return data_cache[symbol]
+
+def replace_nan(obj):
+    if isinstance(obj, float) and np.isnan(obj):
+        return None
+    elif isinstance(obj, dict):
+        return {k: replace_nan(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [replace_nan(i) for i in obj]
+    return obj
+
+def parse_statement(file_path):
+    df = pd.read_csv(file_path)
+    ticker_data = df.groupby('Ticker').apply(lambda x: x.to_dict(orient='records')).to_dict()
+    json_file_path = os.path.join(app.config['UPLOAD_FOLDER'], 'statement.json')
+    with open(json_file_path, 'w') as json_file:
+        json.dump(ticker_data, json_file, indent=4)
+        print("Statement data saved to:", json_file_path)
+    return json_file_path
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    if file:
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        parse_statement(file_path)
+        return jsonify({'success': True}), 200
+    
+@app.route('/portfolio')
+def portfolio():
+    return render_template("my_portfolio.html")
+
+@app.route('/api/portfolio')
+def get_portfolio():
+    json_file_path = os.path.join(app.config['DATA_FOLDER'], 'statement.json')
+    print("Fetching portfolio data...", json_file_path)
+    if os.path.exists(json_file_path):
+        with open(json_file_path, 'r') as json_file:
+            data = json.load(json_file)
+            data = replace_nan(data)
+        #portfolio = parse_statement(data)
+        return jsonify(data)
+    return jsonify({"error": "No portfolio data found"}), 404
+
+@app.route('/api/ticker_info', methods=['GET'])
+def get_ticker_price():
+    symbol = request.args.get('symbol')
+    if not symbol:
+        return jsonify({"error": "Symbol parameter is required"}), 400
+
+    symbol = symbol.upper()
+    stock = yf.Ticker(symbol)
+    
+    try:
+        data = stock.info
+        if not data:
+            return jsonify({"error": "No data found for the given symbol"}), 404
+        
+        # Convert the data to a JSON-serializable format
+        data_dict = {key: value for key, value in data.items()}
+        return jsonify(data_dict)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/stock_data")
 def get_stock_data():

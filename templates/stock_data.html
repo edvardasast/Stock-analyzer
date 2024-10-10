@@ -1,10 +1,14 @@
-{% extends "base.html" %}
+{% extends "index.html" %}
 
 {% block title %}
     Metrics | Stock Analyzer
 {% endblock %}
 
 {% block content %}
+ <!-- Input Form for Stock Symbol -->
+ <div class="container">
+    {% include 'stock_load.html' %}
+</div>
 <div class="container">
     {% include 'company_data.html' %}
 </div>

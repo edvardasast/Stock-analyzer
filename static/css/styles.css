@@ -462,3 +462,111 @@ canvas {
     background-position: right 10px center;
     background-size: 16px 16px;
 }
+
+.portfolio-container {
+    width: 100%;
+    margin: 0 auto;
+}
+
+.portfolio-header, .portfolio-item {
+    display: flex;
+    flex-direction: column;
+    background-color: #1f1f2e;
+    margin: 10px 0;
+    border-radius: 8px;
+}
+
+.portfolio-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+}
+
+.portfolio-header .portfolio-row {
+    background-color: #2a2a3c;
+    border-bottom: 2px solid #3a3a4f;
+}
+
+.portfolio-header .portfolio-column, .portfolio-item .portfolio-column {
+    flex: 1;
+    text-align: center;
+    font-size: 0.6rem;
+}
+
+.holding-column {
+    flex: 2; /* Make this column wider to accommodate the logo and company name */
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.portfolio-name h2 {
+    font-size: 0.6rem;
+    color: #ffffff;
+    margin: 0;
+}
+
+.portfolio-name p {
+    font-size: 0.5rem;
+    color: #888;
+    margin: 0;
+}
+
+.positive {
+    color: #4caf50; /* Green for positive growth */
+}
+
+.negative {
+    color: #f44336; /* Red for negative growth */
+}
+.company-logo img {
+    width: 20px;
+    height: 20px;
+    margin: 20px;
+}
+.upload-container {
+    display: flex;
+    justify-content: flex-end; /* Align the button to the right */
+    margin: 10px; /* Optional: Add some space below the container */
+}
+
+.upload_statement {
+    background: transparent;
+    border: none;
+    color: #ffffff; /* Set the text color */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px; /* Space between icon and text */
+    padding: 5px 10px; /* Optional: Add some padding */
+    font-size: 1rem; /* Adjust font size if needed */
+}
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.portfolio-value {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 10px;
+}
+.portfolio-value h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: white;
+}
+
+.portfolio-value p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: white;
+}
+
+.portfolio-value p:first-child {
+    font-size: 0.5rem;
+    font-weight: bold;
+}
