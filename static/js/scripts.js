@@ -24,37 +24,6 @@ function getCookie(name) {
     return "";
 }
 
-//Portfolio
-function updatePortfolioChart(timeFrame, chart, dates, values) {
-    console.log("Update Portfolio Chart")
-    let filteredDates = [];
-    let filteredValues = [];
-    const now = new Date();
-
-    if (timeFrame === '1M') {
-        const oneMonthAgo = new Date();
-        oneMonthAgo.setMonth(now.getMonth() - 1);
-        filteredDates = dates.filter(date => new Date(date) >= oneMonthAgo);
-        filteredValues = values.slice(-filteredDates.length);
-    } else if (timeFrame === '1Y') {
-        const oneYearAgo = new Date();
-        oneYearAgo.setFullYear(now.getFullYear() - 1);
-        filteredDates = dates.filter(date => new Date(date) >= oneYearAgo);
-        filteredValues = values.slice(-filteredDates.length);
-    } else if (timeFrame === 'YTD') {
-        const startOfYear = new Date(now.getFullYear(), 0, 1);
-        filteredDates = dates.filter(date => new Date(date) >= startOfYear);
-        filteredValues = values.slice(-filteredDates.length);
-    } else if (timeFrame === 'MAX') {
-        filteredDates = dates;
-        filteredValues = values;
-    }
-
-    chart.data.labels = filteredDates;
-    chart.data.datasets[0].data = filteredValues;
-    chart.update();
-}
-
 // Original loadLogo function
 function loadLogo(companyWebsite, ticker, data) {
     let logoUrl = "";
@@ -90,28 +59,30 @@ function loadLogo(companyWebsite, ticker, data) {
 let portfolioChart; // Declare a variable to store the chart instance
 
 // Function to load the portfolio data
+// Function to load the portfolio data
 function loadPortfolio() {
+    document.getElementById('portfolio_container').style.display = 'none';
+    document.getElementById('loading-container').style.display = 'flex';
+
     const portfolioContainer = document.getElementById('portfolio-container');
+    portfolioContainer.innerHTML = '';  // Clear any existing content
+
     fetch('/api/portfolio')
         .then(response => response.json())
-        .then(data => {
-            portfolioContainer.innerHTML = '';  // Clear any existing content
-            const portfolioItems = data;
+        .then(portfolioItems => {
             let total_invested = 0;
             let total_current = 0;
             let totalPortfolioValue = 0;
-            const dates = [];
-            const values = [];
+
+            const fetchPromises = [];
 
             Object.entries(portfolioItems).forEach(([ticker, data]) => {
-                const portfolioItem = document.createElement('div');
-                portfolioItem.className = 'portfolio-item';
-                // Calculate invested amount
                 let investedAmount = 0;
                 let stocksAmount = 0;
+
                 if (Array.isArray(data)) {
-                    console.log(data);
                     data.forEach(event => {
+                        const eventDate = new Date(event['Date']).toISOString().split('T')[0];
                         if (event['Type'] === 'BUY' || event['Type'] === 'BUY - MARKET') {
                             investedAmount += parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
                             stocksAmount += parseFloat(event['Quantity']);
@@ -124,33 +95,27 @@ function loadPortfolio() {
                             stocksAmount += parseFloat(event['Quantity']);
                         }
                     });
+
                     total_invested += parseFloat(investedAmount);
-                } else {
-                    console.log("Data is not an array or is undefined");
                 }
 
                 if (stocksAmount > 0) {
-                    let ticker_name = '';
-                    let current_price = 0;
-                    fetch(`/api/ticker_info?symbol=${ticker}`)
+                    const fetchPromise = fetch(`/api/ticker_info?symbol=${ticker}`)
                         .then(response => response.json())
                         .then(data => {
                             if (data.error) {
                                 console.error(`Error from API: ${data.error}`);
                                 return;
                             }
-                            ticker_name = data.longName;
-                            current_price = data.previousClose;
+
+                            const ticker_name = data.info.longName;
+                            const current_price = data.info.previousClose;
                             const currentValue = (stocksAmount * current_price).toFixed(2);
+                            const growthLoss = ((currentValue - investedAmount) / investedAmount * 100).toFixed(2);
                             totalPortfolioValue += parseFloat(currentValue);
 
-                            const growthLoss = ((currentValue - investedAmount) / investedAmount * 100).toFixed(2);
-                            const companyWebsite = data.website;
+                            const companyWebsite = data.info.website;
 
-                            // Load logo using your original function
-                            //loadLogo(companyWebsite, ticker, data);
-
-                            // Determine classes based on values
                             const currentValueClass = currentValue < investedAmount ? 'negative' : 'positive';
                             const growthLossClass = growthLoss < 0 ? 'negative' : 'positive';
 
@@ -159,7 +124,7 @@ function loadPortfolio() {
                                     <div class="portfolio-row">
                                         <div class="portfolio-column holding-column">
                                             <div class="company-logo company-logo-${ticker}">
-                                                <img src="/static/images/default.png" alt="${data.name} Logo">
+                                                <img src="/static/images/default.png" alt="${data.info.name} Logo">
                                             </div>
                                             <div class="portfolio-name">
                                                 <h2>${ticker_name}</h2>
@@ -174,76 +139,171 @@ function loadPortfolio() {
                                     </div>
                                 </div>
                             `;
-                            total_invested += investedAmount;
-                            total_current += currentValue;
-                            portfolioItem.innerHTML = portfolioContent;
-                            portfolioContainer.appendChild(portfolioItem);
 
-                            // Update total portfolio value
-                            document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(2)}`;
-                            document.getElementById('total-portfolio-invested').textContent = `$${total_invested.toFixed(2)}`;
-                            const portfolioProfit = totalPortfolioValue - total_invested;
-                            document.getElementById('portfolio-profit').textContent = `$${portfolioProfit.toFixed(2)}`;
-
-                            
+                            return portfolioContent;
                         });
-                }
-            });
-            console.log("Dates: " + dates);
-            console.log("Values: " + values);
-            // Destroy existing chart if it exists
-            if (portfolioChart) {
-                portfolioChart.destroy();
-            }
-            // Create the chart
-            const ctx = document.getElementById('portfolioChart').getContext('2d');
-            portfolioChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: dates,
-                    datasets: [{
-                        label: 'Portfolio Value',
-                        data: values,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        fill: true,
-                        tension: 0.1
-                    }]
-                },
-                options: {
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                unit: 'month'
-                            },
-                            title: {
-                                display: true,
-                                text: 'Date'
-                            }
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: 'Value'
-                            }
-                        }
-                    }
+
+                    fetchPromises.push(fetchPromise);
                 }
             });
 
-            // Add event listeners for time frame buttons
-            document.getElementById('1MBtn').addEventListener('click', () => updatePortfolioChart('1M', portfolioChart, dates, values));
-            document.getElementById('1YBtn').addEventListener('click', () => updatePortfolioChart('1Y', portfolioChart, dates, values));
-            document.getElementById('YTDBtn').addEventListener('click', () => updatePortfolioChart('YTD', portfolioChart, dates, values));
-            document.getElementById('MAXBtn').addEventListener('click', () => updatePortfolioChart('MAX', portfolioChart, dates, values));
+            // Wait for all promises to resolve before updating the UI
+            Promise.all(fetchPromises).then(portfolioItemsHTML => {
+                portfolioItemsHTML.forEach(itemHTML => {
+                    const portfolioItem = document.createElement('div');
+                    portfolioItem.innerHTML = itemHTML;
+                    portfolioContainer.appendChild(portfolioItem);
+                });
+                const maxButton = document.getElementById('MAXBtn');
+                updatePortfolioChart("MAX",maxButton);
 
+                // Update total portfolio values
+                document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(2)}`;
+                document.getElementById('total-portfolio-invested').textContent = `$${total_invested.toFixed(2)}`;
+                const portfolioProfit = totalPortfolioValue - total_invested;
+                document.getElementById('portfolio-profit').textContent = `$${portfolioProfit.toFixed(2)}`;
+
+                // Add event listeners for time frame buttons
+                document.getElementById('1MBtn').addEventListener('click', function() {
+                    updatePortfolioChart('1M', this);
+                });
+                document.getElementById('1YBtn').addEventListener('click', function() {
+                    updatePortfolioChart('1Y', this);
+                });
+                document.getElementById('YTDBtn').addEventListener('click', function() {
+                    updatePortfolioChart('YTD', this);
+                });
+                document.getElementById('MAXBtn').addEventListener('click', function() {
+                    updatePortfolioChart('MAX', this);
+                });    
+                document.getElementById('loading-container').style.display = 'none';
+                document.getElementById('portfolio_container').style.display = 'block';
+            });
         })
         .catch(error => {
             console.error('Error fetching portfolio:', error);
             portfolioContainer.innerHTML = '<p>Failed to load portfolio. Please try again later.</p>';
         });
 }
+
+function updatePortfolioChart(timeFrame, button) {
+    // Function to update the selected button
+
+    if (button) {
+        // Remove 'active' class from all buttons
+        const buttons = document.querySelectorAll('#timeRangeButtons .btn');
+        buttons.forEach(btn => btn.classList.remove('active'));
+        console.log("Button")
+        // Add 'active' class to the clicked button
+        button.classList.add('active');
+    }
+    const ctx = document.getElementById('portfolioChart').getContext('2d');
+    console.log("Update Portfolio Chart");
+
+    // Destroy previous chart if it exists
+    if (portfolioChart) {
+        portfolioChart.destroy();
+    }
+
+    const dates = [];
+    const values = [];
+
+    fetch('/api/portfolio_events')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error(`Error from API: ${data.error}`);
+                return;
+            }
+
+            let totalInvested = 0;
+            const now = new Date();
+            let startDate;  // Define startDate based on timeFrame
+
+            // Calculate startDate based on selected timeFrame
+            if (timeFrame === '1M') {
+                startDate = new Date(now.setMonth(now.getMonth() - 1));  // Last 1 month
+            } else if (timeFrame === '1Y') {
+                startDate = new Date(now.setFullYear(now.getFullYear() - 1));  // Last 1 year
+            } else if (timeFrame === 'YTD') {
+                startDate = new Date(now.getFullYear(), 0, 1);  // Year to Date
+            } else {
+                startDate = new Date(0);  // MAX, include all data
+            }
+
+            if (data && data.length > 0) {
+                data.forEach(event => {
+                    try {
+                        const eventDate = new Date(event['date']);
+                        if (event['type'] === 'BUY' || event['type'] === 'BUY - MARKET') {
+                            totalInvested += parseFloat(event['total_amount']);
+                            if (!isNaN(eventDate) && eventDate >= startDate) {
+                                dates.push(eventDate.toISOString().split('T')[0]);
+                                values.push(totalInvested);
+                            }
+                        } else if (event['type'] === 'SELL' || event['type'] === 'SELL - MARKET' || event['type'] === 'MERGER - CASH') {
+                            totalInvested -= parseFloat(event['total_amount']);
+                            if (!isNaN(eventDate) && eventDate >= startDate) {
+                                dates.push(eventDate.toISOString().split('T')[0]);
+                                values.push(totalInvested);
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Error parsing date: ${event['date']}`, error);
+                    }
+                });
+
+                // Only update the chart after processing all the data
+                if (dates.length > 0 && values.length > 0) {
+                    portfolioChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: dates,
+                            datasets: [{
+                                label: 'Portfolio Value',
+                                data: values,
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                fill: true,
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'month'
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Date'
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Value'
+                                    },
+                                    beginAtZero: false
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    console.error('No valid data to display in chart');
+                }
+            } else {
+                console.error('No portfolio data received from API');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching portfolio events:', error);
+        });
+}
+
+
+
 
 
 function fetchStockData(symbol) {
@@ -307,16 +367,13 @@ function fetchStockData(symbol) {
             } else {
                 //console.error('Element with id "metrics elements not found" not found.');
             }
-            // Find and pass the 5Yr button by its ID to updateChart function
-
-            //updateChart("YTD", ytdButton, []);
         })
         .catch(error => console.error("Error fetching data:", error));
 }
 
 // Function to fetch and display stock recommendations
 function loadRecommendations(symbol) {
-    fetch(`/api/recomendations?symbol=${symbol}`)
+    fetch(`/api/recommendations?symbol=${symbol}`)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
@@ -331,7 +388,7 @@ function loadRecommendations(symbol) {
             document.getElementById('symbol-name').textContent = symbol;
 
             // Display Recommendations Summary
-            const recommendationsSummary = data.recomendations_summary;
+            const recommendationsSummary = data.recommendations_summary;
             console.log(recommendationsSummary)
             if (recommendationsSummary && recommendationsSummary.length > 0) {
                 let summaryHtml = '<table><thead><tr><th>Period</th><th>Strong Buy</th><th>Buy</th><th>Hold</th><th>Sell</th><th>Strong Sell</th></tr></thead><tbody>';
@@ -353,7 +410,7 @@ function loadRecommendations(symbol) {
             }
 
             // Display Recommendations
-            const recommendations = data.recomendations;
+            const recommendations = data.recommendations;
             if (recommendations && recommendations.length > 0) {
                 let recommendationsHtml = '<table><thead><tr><th>Period</th><th>Strong Buy</th><th>Buy</th><th>Hold</th><th>Sell</th><th>Strong Sell</th></tr></thead><tbody>';
                 recommendations.forEach(recommendation => {
@@ -402,7 +459,6 @@ function loadRecommendations(symbol) {
 function updateChart(range, button, upgradesDowngradesData) {
     console.log("Update Chart")
     const stockSymbol = getCookie('stockSymbol');
-    //const ytdButton = document.getElementById('ytdBtn');
     if (button) {
         // Remove 'active' class from all buttons
         const buttons = document.querySelectorAll('#timeRangeButtons .btn');
@@ -1195,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', function () {
     else if (currentUrl.includes('/news')) {
         loadNews(); // Load news articles
     }
-    else if (currentUrl.includes('/recomendations')) {
+    else if (currentUrl.includes('/recommendations')) {
         loadRecommendations(stockSymbol); // Load stock recommendations
     }
     else if (currentUrl.includes('/analyst_estimates')) {

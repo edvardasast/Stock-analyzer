@@ -26,10 +26,8 @@ AI Opinion | Stock Analyzer
         <button id="ask-ai-opinion-btn" class="btn btn-primary" onclick="askAIOpinion()">Ask AI Opinion</button>
     </div>
     
-    <div id="loading-container" class="loading-container">
-        <div>Loading...</div>
-        <div id="progress" class="spinner"></div> <!-- Animated progress indicator -->
-    </div>
+    {% include 'progress.html' %}
+
     <div class="section" id="company-situation">
         <h2>Company Situation</h2>
         <p><strong>Financial Health:</strong> <span id="financial-health"></span></p>

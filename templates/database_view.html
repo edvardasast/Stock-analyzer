@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database View</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="mt-4">Stock Portfolio</h1>
+        <table class="table table-striped mt-4" id="portfolioTable">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Ticker</th>
+                    <th>Type</th>
+                    <th>Quantity</th>
+                    <th>Price per Share</th>
+                    <th>Total Amount</th>
+                    <th>Currency</th>
+                    <th>FX Rate</th>
+                </tr>
+            </thead>
+            <tbody id="portfolioTableBody">
+                <!-- Rows will be dynamically added here -->
+            </tbody>
+        </table>
+
+        <h1 class="mt-4">Stock Information</h1>
+        <table class="table table-striped mt-4" id="stockInfoTable">
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Information</th>
+                </tr>
+            </thead>
+            <tbody id="stockInfoTableBody">
+                <!-- Rows will be dynamically added here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Fetch portfolio data and populate table
+        fetch('/api/portfolio')
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.getElementById('portfolioTableBody');
+                for (const ticker in data) {
+                    data[ticker].forEach(holding => {
+                        const row = `<tr>
+                            <td>${holding.Date}</td>
+                            <td>${holding.Ticker}</td>
+                            <td>${holding.Type}</td>
+                            <td>${holding.Quantity}</td>
+                            <td>${holding['Price per share']}</td>
+                            <td>${holding['Total Amount']}</td>
+                            <td>${holding.Currency}</td>
+                            <td>${holding['FX Rate']}</td>
+                        </tr>`;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                }
+            })
+            .catch(error => console.error('Error fetching portfolio data:', error));
+
+        // Fetch stock info data and populate table
+        fetch('/api/portfolio_tickers_info')
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.getElementById('stockInfoTableBody');
+                data.forEach(stock => {
+                    const row = `<tr>
+                        <td>${stock.ticker}</td>
+                        <td>${JSON.stringify(stock.info)}</td>
+                    </tr>`;
+                    tableBody.insertAdjacentHTML('beforeend', row);
+                });
+            })
+            .catch(error => console.error('Error fetching stock info:', error));
+    </script>
+</body>
+</html>
