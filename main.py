@@ -614,6 +614,13 @@ def ai_opinion():
 def get_ai_opinion():
     symbol = request.args.get('symbol', 'AAPL').upper()  # Default to AAPL if no symbol provided
     stock_data = fetch_stock_data(symbol)
+    force_refresh = request.args.get('force_refresh', 'false').lower() == 'true'
+
+    # Check if AI opinion is already in session and not forcing refresh
+    if 'ai_opinion' in session and session['ai_opinion'].get('symbol') == symbol and not force_refresh:
+        print("AI opinion found in session")
+        return jsonify(session['ai_opinion'])
+    
     include_financial_data = request.args.get('financial_data', 'true').lower() == 'true'
     include_yearly_reports = request.args.get('yearly_reports', 'true').lower() == 'true'
     include_quarterly_reports = request.args.get('quarterly_reports', 'true').lower() == 'true'
@@ -721,6 +728,8 @@ def get_ai_opinion():
             "symbol": symbol,
             "ai_opinion": ai_opinion
         }
+         # Save AI opinion in session
+        session['ai_opinion'] = response_data
         return jsonify(response_data)
     except Exception as e:
         print("Error ", e)
