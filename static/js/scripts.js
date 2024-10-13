@@ -154,8 +154,8 @@ function loadPortfolio() {
                     portfolioItem.innerHTML = itemHTML;
                     portfolioContainer.appendChild(portfolioItem);
                 });
-                const maxButton = document.getElementById('MAXBtn');
-                updatePortfolioChart("MAX",maxButton);
+                const ytdButton = document.getElementById('YTDBtn');
+                updatePortfolioChart("YTD", ytdButton);
 
                 // Update total portfolio values
                 document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(2)}`;
@@ -164,18 +164,18 @@ function loadPortfolio() {
                 document.getElementById('portfolio-profit').textContent = `$${portfolioProfit.toFixed(2)}`;
 
                 // Add event listeners for time frame buttons
-                document.getElementById('1MBtn').addEventListener('click', function() {
+                document.getElementById('1MBtn').addEventListener('click', function () {
                     updatePortfolioChart('1M', this);
                 });
-                document.getElementById('1YBtn').addEventListener('click', function() {
+                document.getElementById('1YBtn').addEventListener('click', function () {
                     updatePortfolioChart('1Y', this);
                 });
-                document.getElementById('YTDBtn').addEventListener('click', function() {
+                document.getElementById('YTDBtn').addEventListener('click', function () {
                     updatePortfolioChart('YTD', this);
                 });
-                document.getElementById('MAXBtn').addEventListener('click', function() {
+                document.getElementById('MAXBtn').addEventListener('click', function () {
                     updatePortfolioChart('MAX', this);
-                });    
+                });
                 document.getElementById('loading-container').style.display = 'none';
                 document.getElementById('portfolio_container').style.display = 'block';
             });
@@ -185,10 +185,26 @@ function loadPortfolio() {
             portfolioContainer.innerHTML = '<p>Failed to load portfolio. Please try again later.</p>';
         });
 }
-
+function formatDateToYYYYMMDD(date) {
+    let year = date.getFullYear();
+    let month = ('0' + (date.getMonth() + 1)).slice(-2); // Months are zero-based
+    let day = ('0' + date.getDate()).slice(-2);
+    return `${year}-${month}-${day}`;
+}
 function updatePortfolioChart(timeFrame, button) {
+    const now = new Date();
+    let historyStartDate;  // Declare startDate without initializing
+            // Calculate startDate based on selected timeFrame
+            if (timeFrame === '1M') {
+                historyStartDate = new Date(now.setMonth(now.getMonth() - 1));  // Last 1 month
+            } else if (timeFrame === '1Y') {
+                historyStartDate = new Date(now.setFullYear(now.getFullYear() - 1));  // Last 1 year
+            } else if (timeFrame === 'YTD') {
+                historyStartDate = new Date(now.getFullYear(), 0, 1);  // Year to Date
+            } else {
+                historyStartDate = new Date(0);  // MAX, include all data
+            }
     // Function to update the selected button
-
     if (button) {
         // Remove 'active' class from all buttons
         const buttons = document.querySelectorAll('#timeRangeButtons .btn');
@@ -207,43 +223,33 @@ function updatePortfolioChart(timeFrame, button) {
 
     const dates = [];
     const values = [];
+    const dataset = [];
 
-    fetch('/api/portfolio_events')
+    // Format the date to YYYY-MM-DD before sending
+    let formattedDate = formatDateToYYYYMMDD(historyStartDate);
+    fetch(`/api/portfolio_events?date=${formattedDate}`)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
                 console.error(`Error from API: ${data.error}`);
                 return;
             }
-
+            //console.log(data);
+            const endDate = new Date(); // Current date
             let totalInvested = 0;
-            const now = new Date();
-            let startDate;  // Define startDate based on timeFrame
-
-            // Calculate startDate based on selected timeFrame
-            if (timeFrame === '1M') {
-                startDate = new Date(now.setMonth(now.getMonth() - 1));  // Last 1 month
-            } else if (timeFrame === '1Y') {
-                startDate = new Date(now.setFullYear(now.getFullYear() - 1));  // Last 1 year
-            } else if (timeFrame === 'YTD') {
-                startDate = new Date(now.getFullYear(), 0, 1);  // Year to Date
-            } else {
-                startDate = new Date(0);  // MAX, include all data
-            }
-
-            if (data && data.length > 0) {
-                data.forEach(event => {
+            if (data.holdings && data.holdings.length > 0) {
+                data.holdings.forEach(event => {
                     try {
                         const eventDate = new Date(event['date']);
                         if (event['type'] === 'BUY' || event['type'] === 'BUY - MARKET') {
                             totalInvested += parseFloat(event['total_amount']);
-                            if (!isNaN(eventDate) && eventDate >= startDate) {
+                            if (!isNaN(eventDate) && eventDate >= historyStartDate) {
                                 dates.push(eventDate.toISOString().split('T')[0]);
                                 values.push(totalInvested);
                             }
                         } else if (event['type'] === 'SELL' || event['type'] === 'SELL - MARKET' || event['type'] === 'MERGER - CASH') {
                             totalInvested -= parseFloat(event['total_amount']);
-                            if (!isNaN(eventDate) && eventDate >= startDate) {
+                            if (!isNaN(eventDate) && eventDate >= historyStartDate) {
                                 dates.push(eventDate.toISOString().split('T')[0]);
                                 values.push(totalInvested);
                             }
@@ -252,20 +258,40 @@ function updatePortfolioChart(timeFrame, button) {
                         console.error(`Error parsing date: ${event['date']}`, error);
                     }
                 });
+                //console.log(data.history);
+                const historyDates = data.history.map(entry => entry.date);
+                //console.log(historyDates)
+                const historyValues = data.history.map(entry => entry.totalValue);
+                //console.log(historyDates)
+                const historyInvested = data.history.map(entry => entry.totalInvested);
+                //console.log(historyValues)
+                console.log(historyInvested)
 
                 // Only update the chart after processing all the data
                 if (dates.length > 0 && values.length > 0) {
                     portfolioChart = new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: dates,
+                            labels: historyDates,
                             datasets: [{
-                                label: 'Portfolio Value',
-                                data: values,
+                                label: 'Invested',
+                                data: historyInvested,
                                 borderColor: 'rgba(75, 192, 192, 1)',
                                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                fill: false,
+                                tension: 0,
+                                pointRadius: 0,  // Set point radius to 0 to hide points
+                                pointHoverRadius: 0,  // Ensure points don’t appear on hover
+                            },
+                            {
+                                label: 'Current Value', // Label for the new dataset
+                                data: historyValues, // Data for the new dataset
+                                borderColor: 'rgba(21, 88, 38, 1)', // Styling for the new dataset
+                                backgroundColor: 'rgba(21, 88, 38, 0.2)',
                                 fill: true,
-                                tension: 0.1
+                                tension: 0.1,
+                                pointRadius: 0,  // Set point radius to 0 to hide points
+                                pointHoverRadius: 0,  // Ensure points don’t appear on hover
                             }]
                         },
                         options: {

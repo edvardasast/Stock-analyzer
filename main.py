@@ -2,14 +2,18 @@ import os
 import tempfile
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
+import logging
 from flask import Flask, render_template, jsonify, request, session
 from flask_session import Session
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects.sqlite import JSON
+from sqlalchemy import inspect
 import requests
 import yfinance as yf
 import pandas as pd
+import threading
 import numpy as np
+from datetime import datetime
 from werkzeug.utils import secure_filename
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -52,6 +56,9 @@ if not OPENAI_API_KEY:
 
 # Global cache to store yfinance data
 data_cache = {}
+
+# Initialize the scheduler
+scheduler = BackgroundScheduler()
 
 # Map ranges to yfinance period parameters
 RANGE_MAPPING = {
@@ -104,39 +111,121 @@ class StockInfo(db.Model):
             'ticker': self.ticker,
             'info': self.info
         }
+class StockHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ticker = db.Column(db.String(10), nullable=False)
+    date = db.Column(db.String(20), nullable=False)
+    close = db.Column(db.Float, nullable=False)
+    high = db.Column(db.Float, nullable=False)
+    low = db.Column(db.Float, nullable=False)
+    open = db.Column(db.Float, nullable=False)
+    volume = db.Column(db.Float, nullable=False)
+
+    def to_dict(self):
+        return {
+            'ticker': self.ticker,
+            'date': self.date,
+            'close': self.close,
+            'high': self.high,
+            'low': self.low,
+            'open': self.open,
+            'volume': self.volume
+        }
 # Helper Functions
+def migrate_history_data():
+    stock_infos = StockInfo.query.all()
+    for stock_info in stock_infos:
+        history = stock_info.history
+        if history:
+            for entry in history:
+                stock_history = StockHistory(
+                    ticker=stock_info.ticker,
+                    date=entry['Date'],
+                    close=entry['Close'],
+                    high=entry['High'],
+                    low=entry['Low'],
+                    open=entry['Open'],
+                    volume=entry['Volume']
+                )
+                db.session.add(stock_history)
+    db.session.commit()
+    print("Migration completed.")
 
 def update_stock_info():
-    #print("Updating stock info for all portfolio tickers...")
-    # Fetch all unique tickers from the portfolio
-    tickers = db.session.query(StockHolding.ticker).distinct().all()
-    tickers = [t[0] for t in tickers]  # Extract ticker strings
-    for ticker in tickers:
-        try:
-            stock = yf.Ticker(ticker)
-            info = stock.info
-            if info:
-                # Check if StockInfo entry exists
-                stock_info_entry = StockInfo.query.filter_by(ticker=ticker).first()
-                if stock_info_entry:
-                    # Update existing entry
-                    stock_info_entry.info = info
-                else:
-                    # Create new entry
-                    stock_info_entry = StockInfo(ticker=ticker, info=info)
-                    db.session.add(stock_info_entry)
+    with app.app_context():
+        print("Updating stock info for all portfolio tickers...")
+        logging.info("Updating stock info for all portfolio tickers...")
+        # Fetch all unique tickers from the portfolio
+        tickers = db.session.query(StockHolding.ticker).distinct().all()
+        tickers = [t[0] for t in tickers]  # Extract ticker strings
+        first_date_str = db.session.query(StockHolding).first().date
+        first_date = datetime.strptime(first_date_str, '%Y-%m-%dT%H:%M:%S.%fZ').strftime('%Y-%m-%d')
+        print("first: ", first_date)
+        enddate = datetime.now().strftime('%Y-%m-%d')
+        print("end: ", enddate)
+        #enddate = datetime.strptime(first_date, "%Y-%m-%d").date()
+        #startdate = enddate - datetime.timedelta(days=365*5) # for 5 years
+        for ticker in tickers:
+            try:
+                stock = yf.Ticker(ticker)
+                info = stock.info
+                history = stock.history(start=first_date, end=enddate, interval="1d")
+                history = history.reset_index()
+                history['Date'] = history['Date'].apply(lambda x: x.isoformat())
+
+                # Convert the DataFrame to a list of dictionaries (JSON serializable)
+                history_dict = history.to_dict(orient='records')
+                # Handle NaN values in history data
+                history_dict = replace_nan(history_dict)
+                for _, entry in history.iterrows():
+                    stock_history_entry = StockHistory.query.filter_by(ticker=ticker, date=entry['Date']).first()
+                    if stock_history_entry:
+                        # Update existing entry
+                        stock_history_entry.close = entry['Close']
+                        stock_history_entry.high = entry['High']
+                        stock_history_entry.low = entry['Low']
+                        stock_history_entry.open = entry['Open']
+                        stock_history_entry.volume = entry['Volume']
+                    else:
+                        # Create new entry
+                        stock_history_entry = StockHistory(
+                            ticker=ticker,
+                            date=entry['Date'],
+                            close=entry['Close'],
+                            high=entry['High'],
+                            low=entry['Low'],
+                            open=entry['Open'],
+                            volume=entry['Volume']
+                        )
+                        db.session.add(stock_history_entry)
                 db.session.commit()
-                #print(f"Updated info for {ticker}")
-            else:
-                print(f"No info found for {ticker}")
-        except Exception as e:
-            print(f"Error updating info for {ticker}: {e}")
-# Initialize the scheduler
-scheduler = BackgroundScheduler()
+                if info:
+                    # Check if StockInfo entry exists
+                    stock_info_entry = StockInfo.query.filter_by(ticker=ticker).first()
+                    if stock_info_entry:
+                        # Update existing entry
+                        stock_info_entry.info = info
+                    else:
+                        # Create new entry
+                        stock_info_entry = StockInfo(ticker=ticker, info=info)
+                        db.session.add(stock_info_entry)
+                    db.session.commit()
+                    #print(f"Updated info for {ticker}")
+                else:
+                    print(f"No info found for {ticker}")
+            except Exception as e:
+                #print(f"Error updating info for {ticker}: {e}")
+                pass
+# Add the job to the scheduler
 scheduler.add_job(func=update_stock_info, trigger="interval", minutes=5)
-scheduler.start()
-# Shut down the scheduler when exiting the app
-atexit.register(lambda: scheduler.shutdown())
+
+# Function to start the scheduler in a separate thread
+def start_scheduler():
+    logging.info("Starting scheduler...")
+    scheduler.start()
+    print("Scheduler started.")
+    atexit.register(lambda: scheduler.shutdown())
+
 def calculate_cagr(revenue_start, revenue_end, years):
     return ((revenue_end / revenue_start) ** (1 / years)) - 1
 
@@ -301,7 +390,60 @@ def calculate_ltl(balance_sheet, cash_flow):
         return 'N/A'
 
 # Routes
+@app.route('/api/clear_table', methods=['GET'])
+def clear_table():
+    table_name = request.args.get('table_name')
 
+    if not table_name:
+        return jsonify({"error": "Missing required parameter: table_name"}), 400
+
+    # Check if the table exists
+    inspector = inspect(db.engine)
+    if table_name not in inspector.get_table_names():
+        return jsonify({"error": f"Table '{table_name}' does not exist"}), 400
+
+    # Clear the table
+    try:
+        table = db.Table(table_name, db.metadata, autoload_with=db.engine)
+        db.session.execute(table.delete())
+        db.session.commit()
+        return jsonify({"message": f"Table '{table_name}' cleared successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/stock_history', methods=['GET'])
+def get_stock_history():
+    ticker = request.args.get('ticker')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    if not ticker or not start_date or not end_date:
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    history = StockHistory.query.filter(
+        StockHistory.ticker == ticker,
+        StockHistory.date >= start_date,
+        StockHistory.date <= end_date
+    ).all()
+
+    return jsonify([entry.to_dict() for entry in history])
+@app.route('/api/stock_holdings', methods=['GET'])
+def get_stock_holdings():
+    ticker = request.args.get('ticker')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    if not ticker or not start_date or not end_date:
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    holdings = StockHolding.query.filter(
+        StockHolding.ticker == ticker,
+        StockHolding.date >= start_date,
+        StockHolding.date <= end_date
+    ).all()
+
+    return jsonify([entry.to_dict() for entry in holdings])
 @app.route("/")
 def home():
     return render_template("base.html")
@@ -355,15 +497,98 @@ def get_portfolio():
         return jsonify(data)
     return jsonify({"error": "No portfolio data found"}), 404
 
-@app.route('/api/portfolio_events', methods=['GET'])
+""" @app.route('/api/portfolio_events', methods=['GET'])
 def get_portfolio_events():
+    date = request.args.get('date')
     print("Fetching portfolio events data from database...")
     holdings = StockHolding.query.all()
-    #print("holdings: ", holdings)
+    print("holdings: ", holdings)
+    history = StockHistory.query.all()
+    print("history: ", history)
+    response = {
+        'holdings': [holding.to_dict() for holding in holdings]
+    }
     if holdings:
-        holdings_dict = [holding.to_dict() for holding in holdings]
-        return jsonify(holdings_dict)
-    return jsonify({"error": "No portfolio data found"}), 404
+        return jsonify(response)
+    return jsonify({"error": "No portfolio data found"}), 404 """
+@app.route('/api/portfolio_events', methods=['GET'])
+def get_portfolio_events():
+    # Get the starting date from query params
+    start_date_str = request.args.get('date')
+    print("start_date_str: ", start_date_str)
+    if not start_date_str:
+        return jsonify({"error": "Missing 'date' parameter"}), 400
+    
+    try:
+        # Parse the start date
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+        print("start_date: ", start_date)  
+    except ValueError:
+        return jsonify({"error": "Invalid date format, expected YYYY-MM-DD"}), 400
+    
+    # Get today's date
+    end_date = datetime.now().date()
+    
+    # Fetch all stock holdings and their history from the database
+    holdings = StockHolding.query.all()
+    history = StockHistory.query.filter(StockHistory.date >= start_date).all()
+
+    if not holdings:
+        return jsonify({"error": "No portfolio data found"}), 404
+    
+    # Prepare a dictionary to store totalValue for each date
+    value_by_date = {}
+    invested_by_date = {}
+    # Populate the value_by_date dictionary with total values from the holding's historical prices
+    for hist in history:
+        date = hist.date.split('T')[0] 
+        if date not in value_by_date:
+            value_by_date[date] = 0
+            invested_by_date[date] = 0
+        
+        # Calculate total value by summing up each holding's value on that date
+        for holding in holdings:
+            if hist.ticker == holding.ticker:
+                if holding.type == 'BUY - MARKET' or holding.type == 'STOCK SPLIT':
+                        if holding.date.split('T')[0] <= date:
+                            value_by_date[date] += hist.close * holding.quantity
+                            invested_by_date[date] += holding.total_amount
+                elif holding.type == 'SELL - MARKET' or holding.type == 'MERGER - CASH':
+                    if holding.date.split('T')[0] <= date:
+                        value_by_date[date] -= hist.close * holding.quantity
+                        invested_by_date[date] -= holding.total_amount
+    # Get a sorted list of all dates from history
+    all_dates = sorted(value_by_date.keys())
+    print("Values dates: ", value_by_date)
+    # Initialize the previous day values
+    previous_value = 0
+    previous_invested = 0
+
+    # Accumulate values for days without transactions
+    for date in all_dates:
+        # If no new value on this date, carry over from previous day
+        if date not in value_by_date:
+            value_by_date[date] = previous_value
+        if date not in invested_by_date:
+            invested_by_date[date] = previous_invested
+        
+        # Update previous values for the next iteration
+        previous_value = value_by_date[date]
+        previous_invested = invested_by_date[date]
+    print("Invested by date: ", invested_by_date)
+     # Create the history object with accumulated values
+    historyObject = [{"date": date, 
+                      "totalValue": value_by_date[date],
+                      "totalInvested": invested_by_date[date]}
+                     for date in all_dates]
+    # Format the response into a list of {'date': 'YYYY-MM-DD', 'totalValue': value} objects
+    response = {
+        'holdings': [holding.to_dict() for holding in holdings],
+        "history": historyObject
+    }
+    
+    #print("response: ", value_by_date)
+    return jsonify(response)
 
 @app.route('/api/ticker_info', methods=['GET'])
 def get_ticker_price():
@@ -876,6 +1101,9 @@ if __name__ == "__main__":
     # Initialize the database before starting the app
     with app.app_context():
         db.create_all()
-         # Start the initial stock info update
-        update_stock_info()
+        #migrate_history_data()
+
+        # Start the scheduler in a separate thread
+        scheduler_thread = threading.Thread(target=start_scheduler)
+        scheduler_thread.start()
     app.run(debug=True)

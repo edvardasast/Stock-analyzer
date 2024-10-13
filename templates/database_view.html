@@ -33,6 +33,7 @@
                 <tr>
                     <th>Ticker</th>
                     <th>Information</th>
+                    <th>History</th>
                 </tr>
             </thead>
             <tbody id="stockInfoTableBody">
@@ -74,6 +75,7 @@
                     const row = `<tr>
                         <td>${stock.ticker}</td>
                         <td>${JSON.stringify(stock.info)}</td>
+                        <td>${JSON.stringify(stock.history)}</td>
                     </tr>`;
                     tableBody.insertAdjacentHTML('beforeend', row);
                 });
