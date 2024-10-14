@@ -420,12 +420,17 @@ def get_stock_history():
 
     if not ticker or not start_date or not end_date:
         return jsonify({"error": "Missing required parameters"}), 400
-
-    history = StockHistory.query.filter(
-        StockHistory.ticker == ticker,
-        StockHistory.date >= start_date,
-        StockHistory.date <= end_date
-    ).all()
+    if ticker == 'ALL':
+        history = StockHistory.query.filter(
+            StockHistory.date >= start_date,
+            StockHistory.date <= end_date
+        ).all()
+    else:
+        history = StockHistory.query.filter(
+            StockHistory.ticker == ticker,
+            StockHistory.date >= start_date,
+            StockHistory.date <= end_date
+        ).all()
 
     return jsonify([entry.to_dict() for entry in history])
 @app.route('/api/stock_holdings', methods=['GET'])
@@ -436,12 +441,17 @@ def get_stock_holdings():
 
     if not ticker or not start_date or not end_date:
         return jsonify({"error": "Missing required parameters"}), 400
-
-    holdings = StockHolding.query.filter(
-        StockHolding.ticker == ticker,
-        StockHolding.date >= start_date,
-        StockHolding.date <= end_date
-    ).all()
+    if ticker == 'ALL':
+        holdings = StockHolding.query.filter(
+            StockHolding.date >= start_date,
+            StockHolding.date <= end_date
+        ).all()
+    else:
+        holdings = StockHolding.query.filter(
+            StockHolding.ticker == ticker,
+            StockHolding.date >= start_date,
+            StockHolding.date <= end_date
+        ).all()
 
     return jsonify([entry.to_dict() for entry in holdings])
 @app.route("/")
@@ -497,20 +507,6 @@ def get_portfolio():
         return jsonify(data)
     return jsonify({"error": "No portfolio data found"}), 404
 
-""" @app.route('/api/portfolio_events', methods=['GET'])
-def get_portfolio_events():
-    date = request.args.get('date')
-    print("Fetching portfolio events data from database...")
-    holdings = StockHolding.query.all()
-    print("holdings: ", holdings)
-    history = StockHistory.query.all()
-    print("history: ", history)
-    response = {
-        'holdings': [holding.to_dict() for holding in holdings]
-    }
-    if holdings:
-        return jsonify(response)
-    return jsonify({"error": "No portfolio data found"}), 404 """
 @app.route('/api/portfolio_events', methods=['GET'])
 def get_portfolio_events():
     # Get the starting date from query params
@@ -522,13 +518,20 @@ def get_portfolio_events():
     try:
         # Parse the start date
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-        print("start_date: ", start_date)  
     except ValueError:
         return jsonify({"error": "Invalid date format, expected YYYY-MM-DD"}), 400
     
-    # Get today's date
-    end_date = datetime.now().date()
-    
+    oldest_event = StockHolding.query.order_by(StockHolding.date.asc()).first()
+
+    # Get the oldest event date from StockHolding
+    oldest_event = StockHolding.query.order_by(StockHolding.date.asc()).first()
+
+    if oldest_event:
+        oldest_event_date = datetime.strptime(oldest_event.date.split('T')[0], "%Y-%m-%d")
+        if start_date < oldest_event_date:
+            start_date = oldest_event_date
+            
+    print("start_date: ", start_date) 
     # Fetch all stock holdings and their history from the database
     holdings = StockHolding.query.all()
     history = StockHistory.query.filter(StockHistory.date >= start_date).all()
@@ -550,16 +553,16 @@ def get_portfolio_events():
         for holding in holdings:
             if hist.ticker == holding.ticker:
                 if holding.type == 'BUY - MARKET' or holding.type == 'STOCK SPLIT':
-                        if holding.date.split('T')[0] <= date:
-                            value_by_date[date] += hist.close * holding.quantity
-                            invested_by_date[date] += holding.total_amount
-                elif holding.type == 'SELL - MARKET' or holding.type == 'MERGER - CASH':
+                    if holding.date.split('T')[0] <= date:
+                        value_by_date[date] += hist.close * holding.quantity
+                        invested_by_date[date] += holding.total_amount
+                elif holding.type == 'SELL - MARKET' or holding.type == 'MERGER - CASH' or holding.type == 'SELL - LIMIT':
                     if holding.date.split('T')[0] <= date:
                         value_by_date[date] -= hist.close * holding.quantity
                         invested_by_date[date] -= holding.total_amount
     # Get a sorted list of all dates from history
     all_dates = sorted(value_by_date.keys())
-    print("Values dates: ", value_by_date)
+    #print("Values dates: ", value_by_date)
     # Initialize the previous day values
     previous_value = 0
     previous_invested = 0
@@ -575,7 +578,7 @@ def get_portfolio_events():
         # Update previous values for the next iteration
         previous_value = value_by_date[date]
         previous_invested = invested_by_date[date]
-    print("Invested by date: ", invested_by_date)
+    #print("Invested by date: ", invested_by_date)
      # Create the history object with accumulated values
     historyObject = [{"date": date, 
                       "totalValue": value_by_date[date],

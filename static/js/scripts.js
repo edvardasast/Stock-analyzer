@@ -24,38 +24,7 @@ function getCookie(name) {
     return "";
 }
 
-// Original loadLogo function
-function loadLogo(companyWebsite, ticker, data) {
-    let logoUrl = "";
-    const logoImg = document.querySelector(`.company-logo-${ticker} img`);
 
-    if (logoImg) {
-        if (companyWebsite) {
-            const logoUrlStart = `${companyWebsite}/favicon.ico`;
-            const img = new Image();
-            img.src = logoUrlStart;
-
-            img.onload = function () {
-                console.log("Logo is available for " + ticker);
-                // Logo is available
-                logoUrl = logoUrlStart;
-                logoImg.src = logoUrl;
-            };
-
-            img.onerror = function () {
-                console.log("Logo unavailable for " + ticker);
-                logoUrl = "/static/images/default.png";
-                logoImg.src = logoUrl;
-            };
-        } else {
-            logoUrl = "/static/images/default.png";
-            console.log("Logo unavailable for " + ticker);
-            logoImg.src = logoUrl;
-        }
-    } else {
-        console.error(`Logo image element not found for ticker: ${ticker}`);
-    }
-}
 let portfolioChart; // Declare a variable to store the chart instance
 
 // Function to load the portfolio data
@@ -73,7 +42,8 @@ function loadPortfolio() {
             let total_invested = 0;
             let total_current = 0;
             let totalPortfolioValue = 0;
-
+            let dividends = 0;
+            let companyWebsite = "";
             const fetchPromises = [];
 
             Object.entries(portfolioItems).forEach(([ticker, data]) => {
@@ -88,11 +58,13 @@ function loadPortfolio() {
                             stocksAmount += parseFloat(event['Quantity']);
                         } else if (event['Type'] === 'STOCK SPLIT') {
                             stocksAmount += parseFloat(event['Quantity']);
-                        } else if (event['Type'] === 'SELL' || event['Type'] === 'SELL - MARKET' || event['Type'] === 'MERGER - CASH') {
+                        } else if (event['Type'] === 'SELL' || event['Type'] === 'SELL - MARKET' || event['Type'] === 'MERGER - CASH' || event['Type'] === 'SELL - LIMIT') {
                             investedAmount -= parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
                             stocksAmount -= parseFloat(event['Quantity']);
                         } else if (event['Type'] === 'MERGER - STOCK') {
                             stocksAmount += parseFloat(event['Quantity']);
+                        } else if (event['Type'] === 'DIVIDEND') {
+                            dividends += parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
                         }
                     });
 
@@ -114,17 +86,17 @@ function loadPortfolio() {
                             const growthLoss = ((currentValue - investedAmount) / investedAmount * 100).toFixed(2);
                             totalPortfolioValue += parseFloat(currentValue);
 
-                            const companyWebsite = data.info.website;
-
+                            companyWebsite = data.info.website;
                             const currentValueClass = currentValue < investedAmount ? 'negative' : 'positive';
                             const growthLossClass = growthLoss < 0 ? 'negative' : 'positive';
-
+                            let logoUrlStart = `${companyWebsite}/favicon.ico`;
+                            
                             const portfolioContent = `
                                 <div class="portfolio-item">
                                     <div class="portfolio-row">
                                         <div class="portfolio-column holding-column">
                                             <div class="company-logo company-logo-${ticker}">
-                                                <img src="/static/images/default.png" alt="${data.info.name} Logo">
+                                                <img src="${logoUrlStart}" alt="${data.info.name} Logo">
                                             </div>
                                             <div class="portfolio-name">
                                                 <h2>${ticker_name}</h2>
@@ -139,7 +111,6 @@ function loadPortfolio() {
                                     </div>
                                 </div>
                             `;
-
                             return portfolioContent;
                         });
 
@@ -162,6 +133,8 @@ function loadPortfolio() {
                 document.getElementById('total-portfolio-invested').textContent = `$${total_invested.toFixed(2)}`;
                 const portfolioProfit = totalPortfolioValue - total_invested;
                 document.getElementById('portfolio-profit').textContent = `$${portfolioProfit.toFixed(2)}`;
+                document.getElementById('portfolio-dividends').textContent = `$${dividends.toFixed(2)}`;
+
 
                 // Add event listeners for time frame buttons
                 document.getElementById('1MBtn').addEventListener('click', function () {
@@ -194,16 +167,16 @@ function formatDateToYYYYMMDD(date) {
 function updatePortfolioChart(timeFrame, button) {
     const now = new Date();
     let historyStartDate;  // Declare startDate without initializing
-            // Calculate startDate based on selected timeFrame
-            if (timeFrame === '1M') {
-                historyStartDate = new Date(now.setMonth(now.getMonth() - 1));  // Last 1 month
-            } else if (timeFrame === '1Y') {
-                historyStartDate = new Date(now.setFullYear(now.getFullYear() - 1));  // Last 1 year
-            } else if (timeFrame === 'YTD') {
-                historyStartDate = new Date(now.getFullYear(), 0, 1);  // Year to Date
-            } else {
-                historyStartDate = new Date(0);  // MAX, include all data
-            }
+    // Calculate startDate based on selected timeFrame
+    if (timeFrame === '1M') {
+        historyStartDate = new Date(now.setMonth(now.getMonth() - 1));  // Last 1 month
+    } else if (timeFrame === '1Y') {
+        historyStartDate = new Date(now.setFullYear(now.getFullYear() - 1));  // Last 1 year
+    } else if (timeFrame === 'YTD') {
+        historyStartDate = new Date(now.getFullYear(), 0, 1);  // Year to Date
+    } else {
+        historyStartDate = new Date(0);  // MAX, include all data
+    }
     // Function to update the selected button
     if (button) {
         // Remove 'active' class from all buttons
@@ -260,9 +233,10 @@ function updatePortfolioChart(timeFrame, button) {
                 });
                 //console.log(data.history);
                 const historyDates = data.history.map(entry => entry.date);
+                console.log(historyDates)
                 //console.log(historyDates)
                 const historyValues = data.history.map(entry => entry.totalValue);
-                //console.log(historyDates)
+                console.log(historyValues)
                 const historyInvested = data.history.map(entry => entry.totalInvested);
                 //console.log(historyValues)
                 console.log(historyInvested)
