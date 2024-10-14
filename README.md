@@ -48,6 +48,7 @@ This project is a Stock Dashboard web application that provides various financia
 
 7. **Run the application**:
     ```bash
+    $env:FLASK_APP = "main.py"
     flask run
     ```
 
