@@ -218,13 +218,15 @@ def update_stock_info():
                 pass
 # Add the job to the scheduler
 scheduler.add_job(func=update_stock_info, trigger="interval", minutes=5)
-
+def shutdown_scheduler():
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
 # Function to start the scheduler in a separate thread
 def start_scheduler():
     logging.info("Starting scheduler...")
     scheduler.start()
     print("Scheduler started.")
-    atexit.register(lambda: scheduler.shutdown())
+    atexit.register(shutdown_scheduler)
 
 def calculate_cagr(revenue_start, revenue_end, years):
     return ((revenue_end / revenue_start) ** (1 / years)) - 1
@@ -276,6 +278,7 @@ def fetch_stock_data(symbol):
         'fast_info': stock.fast_info,
         'dividends': stock.dividends
     }
+    #print("Stock data fetched.", stock.quarterly_financials)
     return data_cache[symbol]
 
 def parse_and_store_statement(file_path):
@@ -739,15 +742,24 @@ def get_income_statement():
     symbol = request.args.get('symbol', 'AAPL').upper()
     stock_data = fetch_stock_data(symbol)
     try:
-        financials = stock_data['financials'].T
-        financials.index = financials.index.strftime('%Y-%m-%d')
-        income_statement = {}
-        for year in financials.index:
-            income_statement[year] = financials.loc[year].to_dict()
+        financials_yearly = stock_data['financials'].T
+        financials_yearly.index = financials_yearly.index.strftime('%Y-%m-%d')
+        income_statement_yearly = {}
+        for year in financials_yearly.index:
+            print("year: ", year)
+            income_statement_yearly[year] = financials_yearly.loc[year].replace({np.nan: None}).to_dict()
+        financials_quartely = stock_data['quarterly_financials'].T
+        financials_quartely.index = financials_quartely.index.strftime('%Y-%m-%d')
+        income_statement_quarterly = {}
+        for quarter in financials_quartely.index:
+            print("quarter: ", quarter)
+            income_statement_quarterly[quarter] = financials_quartely.loc[quarter].replace({np.nan: None}).to_dict()
         response = {
             "symbol": symbol,
-            "income_statement": income_statement
+            "income_statement_yearly": income_statement_yearly,
+            "income_statement_quarterly": income_statement_quarterly,
         }
+        print("response: ", response)
         return jsonify(response)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -761,13 +773,19 @@ def get_balance_sheet():
     symbol = request.args.get('symbol', 'AAPL').upper()
     stock_data = fetch_stock_data(symbol)
     try:
-        balance = stock_data['balance_sheet'].T
-        balance.index = balance.index.strftime('%Y-%m-%d')
-        balance = balance.fillna('N/A').infer_objects(copy=False)
-        balance_sheet = balance.to_dict(orient="index")
+        balance_yearly = stock_data['balance_sheet'].T
+        balance_yearly.index = balance_yearly.index.strftime('%Y-%m-%d')
+        balance_yearly = balance_yearly.fillna('N/A').infer_objects(copy=False)
+        balance_sheet_yearly = balance_yearly.to_dict(orient="index")
+
+        balance_quarterly = stock_data['quarterly_balance_sheet'].T
+        balance_quarterly.index = balance_quarterly.index.strftime('%Y-%m-%d')
+        balance_quarterly = balance_quarterly.fillna('N/A').infer_objects(copy=False)
+        balance_sheet_quarterly = balance_quarterly.to_dict(orient="index")
         response = {
             "symbol": symbol,
-            "balance_sheet": balance_sheet
+            "balance_sheet_yearly": balance_sheet_yearly,
+            "balance_sheet_quarterly": balance_sheet_quarterly
         }
         return jsonify(response)
     except Exception as e:
@@ -782,13 +800,18 @@ def get_cash_flow():
     symbol = request.args.get('symbol', 'AAPL').upper()
     stock_data = fetch_stock_data(symbol)
     try:
-        cash_flow = stock_data['cash_flow'].T
-        cash_flow.index = cash_flow.index.strftime('%Y-%m-%d')
-        cash_flow = cash_flow.fillna('N/A').infer_objects(copy=False)
-        cash_flow_dict = cash_flow.to_dict(orient="index")
+        cash_yearly = stock_data['cash_flow'].T
+        cash_yearly.index = cash_yearly.index.strftime('%Y-%m-%d')
+        cash_yearly = cash_yearly.fillna('N/A').infer_objects(copy=False)
+        cash_flow_yearly = cash_yearly.to_dict(orient="index")
+        cash_quarterly = stock_data['quarterly_cash_flow'].T
+        cash_quarterly.index = cash_quarterly.index.strftime('%Y-%m-%d')
+        cash_quarterly = cash_quarterly.fillna('N/A').infer_objects(copy=False)
+        cash_flow_quarterly = cash_quarterly.to_dict(orient="index")
         response = {
             "symbol": symbol,
-            "cash_flow": cash_flow_dict
+            "cash_flow_yearly": cash_flow_yearly,
+            "cash_flow_quarterly": cash_flow_quarterly
         }
         return jsonify(response)
     except Exception as e:

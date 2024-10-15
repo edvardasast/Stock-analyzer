@@ -182,12 +182,12 @@ function updatePortfolioChart(timeFrame, button) {
         // Remove 'active' class from all buttons
         const buttons = document.querySelectorAll('#timeRangeButtons .btn');
         buttons.forEach(btn => btn.classList.remove('active'));
-        console.log("Button")
+        //console.log("Button")
         // Add 'active' class to the clicked button
         button.classList.add('active');
     }
     const ctx = document.getElementById('portfolioChart').getContext('2d');
-    console.log("Update Portfolio Chart");
+    //console.log("Update Portfolio Chart");
 
     // Destroy previous chart if it exists
     if (portfolioChart) {
@@ -231,15 +231,9 @@ function updatePortfolioChart(timeFrame, button) {
                         console.error(`Error parsing date: ${event['date']}`, error);
                     }
                 });
-                //console.log(data.history);
                 const historyDates = data.history.map(entry => entry.date);
-                console.log(historyDates)
-                //console.log(historyDates)
                 const historyValues = data.history.map(entry => entry.totalValue);
-                console.log(historyValues)
                 const historyInvested = data.history.map(entry => entry.totalInvested);
-                //console.log(historyValues)
-                console.log(historyInvested)
 
                 // Only update the chart after processing all the data
                 if (dates.length > 0 && values.length > 0) {
@@ -617,8 +611,21 @@ function findPriceForDate(date, priceChart) {
     const index = priceChart.dates.indexOf(date);
     return index !== -1 ? priceChart.prices[index] : null;
 }
+
+// Function to get the active button in the button group
+function getActiveButton() {
+    const activeButton = document.querySelector('#timeRangeButtons .btn.active');
+    return activeButton ? activeButton.id : null;
+}
+// Helper function to format values in billions of dollars
+function formatToBillions(value) {
+    return (value / 1e9).toFixed(2); // Convert to billions and format to 2 decimal places
+}
 // Function to fetch and display income statement data
 function loadIncomeStatement(symbol) {
+    const activeButtonId = getActiveButton();
+    console.log('Active Button ID:', activeButtonId); // For debugging
+
     fetch(`/api/income_statement?symbol=${symbol}`)
         .then(response => response.json())
         .then(data => {
@@ -627,18 +634,24 @@ function loadIncomeStatement(symbol) {
                 return;
             }
 
-            const incomeStatement = data.income_statement;
+            let incomeStatementData;
+            let timePeriods;
 
-            // Get the years (column headers)
-            const years = Object.keys(incomeStatement).reverse();
+            if (activeButtonId === 'year') {
+                incomeStatementData = data.income_statement_yearly;
+                timePeriods = Object.keys(incomeStatementData).sort();
+            } else if (activeButtonId === 'quarter') {
+                incomeStatementData = data.income_statement_quarterly;
+                timePeriods = Object.keys(incomeStatementData).sort().slice(-5); // Get the last 5 quarters
+            }
 
-            // Get the fields (row headers) from the first year's data
-            const fields = Object.keys(incomeStatement[years[0]]);
+            // Get the fields (row headers) from the first time period's data
+            const fields = Object.keys(incomeStatementData[timePeriods[0]]);
 
-            // Build table headers (years)
+            // Build table headers (time periods)
             let tableHeader = '<tr><th>Field</th>';
-            years.forEach(year => {
-                tableHeader += `<th>${year}</th>`;
+            timePeriods.forEach(period => {
+                tableHeader += `<th>${period}</th>`;
             });
             tableHeader += '</tr>';
             document.querySelector('thead tr').innerHTML = tableHeader;
@@ -647,8 +660,8 @@ function loadIncomeStatement(symbol) {
             let tableBody = '';
             fields.forEach(field => {
                 let row = `<tr><td>${field}</td>`;
-                years.forEach(year => {
-                    const value = incomeStatement[year][field] || 'N/A';
+                timePeriods.forEach(period => {
+                    const value = incomeStatementData[period][field] || 'N/A';
                     row += `<td>${formatValue(value)}</td>`;
                 });
                 row += '</tr>';
@@ -657,13 +670,104 @@ function loadIncomeStatement(symbol) {
             const element = document.getElementById('income-statement-body');
             if (element) {
                 // Safe to manipulate the element
-                element.innerHTML = tableBody
+                element.innerHTML = tableBody;
             } else {
                 //console.error('Element with id "income-statement" not found.');
             }
-            //document.getElementById('income-statement-body').innerHTML = tableBody;
+
+            // Extract Revenue and Net Income data for the chart
+            const revenueData = timePeriods.map(period => formatToBillions(incomeStatementData[period]['Total Revenue'] || 0));
+            const netIncomeData = timePeriods.map(period => formatToBillions(incomeStatementData[period]['Net Income'] || 0));
+            const profitMarginData = timePeriods.map(period => {
+                const revenue = incomeStatementData[period]['Total Revenue'] || 0;
+                const netIncome = incomeStatementData[period]['Net Income'] || 0;
+                return revenue ? ((netIncome / revenue) * 100).toFixed(2) : 0; // Calculate profit margin as percentage
+            });
+            // Create the chart
+            createIncomeStatementChart(timePeriods, revenueData, netIncomeData, profitMarginData);
         })
         .catch(error => console.error('Error fetching income statement:', error));
+}
+
+// Function to set the active button
+function setActiveButton(buttonId) {
+    const buttons = document.querySelectorAll('#timeRangeButtons .btn');
+    buttons.forEach(button => {
+        if (button.id === buttonId) {
+            button.classList.add('active');
+        } else {
+            button.classList.remove('active');
+        }
+    });
+}
+function createIncomeStatementChart(labels, revenueData, netIncomeData, profitMarginData) {
+    const ctx = document.getElementById('financialChart');
+    if (!ctx) {
+        console.error('Canvas element with id "financialChart" not found.');
+        return;
+    }
+    // Destroy the existing chart instance if it exists
+    if (chart) {
+        chart.destroy();
+    }
+    chart = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Revenue',
+                    data: revenueData,
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderRadius: 5,
+                    borderWidth: 1,
+                },
+                {
+                    label: 'Net Income',
+                    data: netIncomeData,
+                    backgroundColor: 'rgba(153, 102, 255, 0.5)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderRadius: 5,
+                    borderWidth: 1,
+                },
+                {
+                    label: 'Profit Margin (%)',
+                    data: profitMarginData,
+                    type: 'line', // Use a line chart for profit margin
+                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 2,
+                    yAxisID: 'y1', // Use a second y-axis for profit margin
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    beginAtZero: true,
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return `$${value}B`; // Append '$' and 'B' for billions
+                        }
+                    }
+                },
+                y1: {
+                    beginAtZero: true,
+                    position: 'right', // Position the y1 axis on the right
+                    ticks: {
+                        callback: function(value) {
+                            return `${value}%`; // Append '%' for profit margin
+                        }
+                    }
+                }
+            },
+        },
+    });
 }
 
 function formatValue(value) {
@@ -684,6 +788,7 @@ function formatValue(value) {
 
 // Function to fetch and display balance sheet data
 function loadBalanceSheet(symbol) {
+    const activeButtonId = getActiveButton();
     fetch(`/api/balance_sheet?symbol=${symbol}`)
         .then(response => response.json())
         .then(data => {
@@ -691,49 +796,133 @@ function loadBalanceSheet(symbol) {
                 alert(data.error);
                 return;
             }
+            let balanceSheetData;
+            let timePeriods;
 
-            const balanceSheet = data.balance_sheet;  // Use the correct property name 'balance_sheet'
+            if (activeButtonId === 'year') {
+                balanceSheetData = data.balance_sheet_yearly;
+                timePeriods = Object.keys(balanceSheetData).sort();
+            } else if (activeButtonId === 'quarter') {
+                balanceSheetData = data.balance_sheet_quarterly;
+                timePeriods = Object.keys(balanceSheetData).sort().slice(-5); // Get the last 5 quarters
+            }
 
-            // Get the years (column headers) and reverse them to display the most recent year first
-            const years = Object.keys(balanceSheet).reverse();
+            // Get the fields (row headers) from the first time period's data
+            const fields = Object.keys(balanceSheetData[timePeriods[0]]);
 
-            // Get the fields (row headers) from the first year
-            const fields = Object.keys(balanceSheet[years[0]]);
-
-            // Build the table headers (years as columns)
+            // Build table headers (time periods)
             let tableHeader = '<tr><th>Field</th>';
-            years.forEach(year => {
-                tableHeader += `<th>${year}</th>`;
+            timePeriods.forEach(period => {
+                tableHeader += `<th>${period}</th>`;
             });
             tableHeader += '</tr>';
-            document.querySelector('thead').innerHTML = tableHeader;  // Fixed to update 'thead' instead of just 'thead tr'
+            document.querySelector('thead tr').innerHTML = tableHeader;
 
-            // Build the table body (fields as rows)
+            // Build table body (fields)
             let tableBody = '';
             fields.forEach(field => {
-                let row = `<tr><td>${field}</td>`;  // Start the row with the field name
-                years.forEach(year => {
-                    const value = balanceSheet[year][field] || 'N/A';  // Safely access field value
-                    row += `<td>${formatValue(value)}</td>`;  // Add each year's value for the field
+                let row = `<tr><td>${field}</td>`;
+                timePeriods.forEach(period => {
+                    const value = balanceSheetData[period][field] || 'N/A';
+                    row += `<td>${formatValue(value)}</td>`;
                 });
-                row += '</tr>';  // Close the row
-                tableBody += row;  // Append the row to the table body
+                row += '</tr>';
+                tableBody += row;
             });
             const element = document.getElementById('balance-sheet-body');
             if (element) {
                 // Safe to manipulate the element
-                element.innerHTML = tableBody
+                element.innerHTML = tableBody;
             } else {
-                //console.error('Element with id "balance-sheet" not found.');
+                //console.error('Element with id "income-statement" not found.');
             }
-            //document.getElementById('balance-sheet-body').innerHTML = tableBody;  // Update the table body
+            // Extract Revenue and Net Income data for the chart
+            const assetsData = timePeriods.map(period => formatToBillions(balanceSheetData[period]['Total Assets'] || 0));
+            const liabilitiesData = timePeriods.map(period => formatToBillions(balanceSheetData[period]['Total Liabilities Net Minority Interest'] || 0));
+            const debtToAssetsData = timePeriods.map(period => {
+                const assetsData = balanceSheetData[period]['Total Assets'] || 0;
+                const liabilitiesData = balanceSheetData[period]['Total Liabilities Net Minority Interest'] || 0;
+                return assetsData ? ((liabilitiesData / assetsData) * 100).toFixed(2) : 0; // Calculate profit margin as percentage
+            });
+            // Create the chart
+            createBalanceSheetChart(timePeriods, assetsData, liabilitiesData, debtToAssetsData);
         })
         .catch(error => console.error('Error fetching balance sheet:', error));
+}
+function createBalanceSheetChart(labels, assetsData, liabilitiesData, debtToAssetsData) {
+    const ctx = document.getElementById('financialChart');
+    if (!ctx) {
+        console.error('Canvas element with id "financialChart" not found.');
+        return;
+    }
+    // Destroy the existing chart instance if it exists
+    if (chart) {
+        chart.destroy();
+    }
+    chart = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Assets',
+                    data: assetsData,
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderRadius: 5,
+                    borderWidth: 1,
+                },
+                {
+                    label: 'Liabilities',
+                    data: liabilitiesData,
+                    backgroundColor: 'rgba(153, 102, 255, 0.5)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderRadius: 5,
+                    borderWidth: 1,
+                },
+                {
+                    label: 'Debt to Assets (%)',
+                    data: debtToAssetsData,
+                    type: 'line', // Use a line chart for profit margin
+                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 2,
+                    yAxisID: 'y1', // Use a second y-axis for profit margin
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    beginAtZero: true,
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return `$${value}B`; // Append '$' and 'B' for billions
+                        }
+                    }
+                },
+                y1: {
+                    beginAtZero: true,
+                    position: 'right', // Position the y1 axis on the right
+                    ticks: {
+                        callback: function(value) {
+                            return `${value}%`; // Append '%' for profit margin
+                        }
+                    }
+                }
+            },
+        },
+    });
 }
 
 
 // Function to fetch and display balance sheet data
 function loadCashFlow(symbol) {
+    const activeButtonId = getActiveButton();
     fetch(`/api/cash_flow?symbol=${symbol}`)
         .then(response => response.json())
         .then(data => {
@@ -741,46 +930,116 @@ function loadCashFlow(symbol) {
                 alert(data.error);
                 return;
             }
+            let cashFlowData;
+            let timePeriods;
 
-            const cashFlow = data.cash_flow;  // Use the correct property name 'balance_sheet'
+            if (activeButtonId === 'year') {
+                cashFlowData = data.cash_flow_yearly;
+                timePeriods = Object.keys(cashFlowData).sort();
+            } else if (activeButtonId === 'quarter') {
+                cashFlowData = data.cash_flow_quarterly;
+                timePeriods = Object.keys(cashFlowData).sort().slice(-5); // Get the last 5 quarters
+            }
 
-            // Get the years (column headers) and reverse them to display the most recent year first
-            const years = Object.keys(cashFlow).reverse();
+            // Get the fields (row headers) from the first time period's data
+            const fields = Object.keys(cashFlowData[timePeriods[0]]);
 
-            // Get the fields (row headers) from the first year
-            const fields = Object.keys(cashFlow[years[0]]);
-
-            // Build the table headers (years as columns)
+            // Build table headers (time periods)
             let tableHeader = '<tr><th>Field</th>';
-            years.forEach(year => {
-                tableHeader += `<th>${year}</th>`;
+            timePeriods.forEach(period => {
+                tableHeader += `<th>${period}</th>`;
             });
             tableHeader += '</tr>';
-            document.querySelector('thead').innerHTML = tableHeader;  // Fixed to update 'thead' instead of just 'thead tr'
+            document.querySelector('thead tr').innerHTML = tableHeader;
 
-            // Build the table body (fields as rows)
+            // Build table body (fields)
             let tableBody = '';
             fields.forEach(field => {
-                let row = `<tr><td>${field}</td>`;  // Start the row with the field name
-                years.forEach(year => {
-                    const value = cashFlow[year][field] || 'N/A';  // Safely access field value
-                    row += `<td>${formatValue(value)}</td>`;  // Add each year's value for the field
+                let row = `<tr><td>${field}</td>`;
+                timePeriods.forEach(period => {
+                    const value = cashFlowData[period][field] || 'N/A';
+                    row += `<td>${formatValue(value)}</td>`;
                 });
-                row += '</tr>';  // Close the row
-                tableBody += row;  // Append the row to the table body
+                row += '</tr>';
+                tableBody += row;
             });
             const element = document.getElementById('cash-flow-body');
             if (element) {
                 // Safe to manipulate the element
-                element.innerHTML = tableBody
+                element.innerHTML = tableBody;
             } else {
-                //console.error('Element with id "cash-flow" not found.');
+                //console.error('Element with id "income-statement" not found.');
             }
-            //document.getElementById('cash-flow-body').innerHTML = tableBody;  // Update the table body
+            // Extract Revenue and Net Income data for the chart
+            const operatingData = timePeriods.map(period => formatToBillions(cashFlowData[period]['Operating Cash Flow'] || 0));
+            const investingData = timePeriods.map(period => formatToBillions(cashFlowData[period]['Investing Cash Flow'] || 0));
+            const financinggData = timePeriods.map(period => formatToBillions(cashFlowData[period]['Financing Cash Flow'] || 0));
+            // Create the chart
+            createCashFlowChart(timePeriods, operatingData, investingData, financinggData);
+          // Update the table body
         })
         .catch(error => console.error('Error fetching cash flow:', error));
 }
-
+function createCashFlowChart(labels, operatingData, investingData, financinggData) {
+    console.log(labels)
+    const ctx = document.getElementById('financialChart');
+    if (!ctx) {
+        console.error('Canvas element with id "financialChart" not found.');
+        return;
+    }
+    // Destroy the existing chart instance if it exists
+    if (chart) {
+        chart.destroy();
+    }
+    chart = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Operating',
+                    data: operatingData,
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderRadius: 5,
+                    borderWidth: 1,
+                },
+                {
+                    label: 'Investing',
+                    data: investingData,
+                    backgroundColor: 'rgba(153, 102, 255, 0.5)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderRadius: 5,
+                    borderWidth: 1,
+                },
+                {
+                    label: 'Financing',
+                    data: financinggData,
+                    backgroundColor: 'rgba(255, 159, 64, 0.5)',
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    borderRadius: 5,
+                    borderWidth: 2,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    beginAtZero: true,
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return `$${value}B`; // Append '$' and 'B' for billions
+                        }
+                    }
+                }
+            },
+        },
+    });
+}
 // Function to fetch and display 8 Pillars data
 function loadEightPillars(symbol) {
     fetch(`/api/8pillars?symbol=${symbol}`)
@@ -1262,11 +1521,41 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     else if (currentUrl.includes('/cash_flow')) {
         loadCashFlow(stockSymbol); // Load cash flow data
+        // Add event listeners to the buttons
+        document.getElementById('year').addEventListener('click', function() {
+            setActiveButton('year');
+            loadCashFlow(stockSymbol); // Replace 'AAPL' with the desired symbol
+        });
+
+        document.getElementById('quarter').addEventListener('click', function() {
+            setActiveButton('quarter');
+            loadCashFlow(stockSymbol); // Replace 'AAPL' with the desired symbol
+        });
     }
     else if (currentUrl.includes('/balance_sheet')) {
+        // Add event listeners to the buttons
+        document.getElementById('year').addEventListener('click', function() {
+            setActiveButton('year');
+            loadBalanceSheet(stockSymbol); // Replace 'AAPL' with the desired symbol
+        });
+
+        document.getElementById('quarter').addEventListener('click', function() {
+            setActiveButton('quarter');
+            loadBalanceSheet(stockSymbol); // Replace 'AAPL' with the desired symbol
+        });
         loadBalanceSheet(stockSymbol); // Load balance sheet data
     }
     else if (currentUrl.includes('/income_statement')) {
+        // Add event listeners to the buttons
+        document.getElementById('year').addEventListener('click', function() {
+            setActiveButton('year');
+            loadIncomeStatement(stockSymbol); // Replace 'AAPL' with the desired symbol
+        });
+
+        document.getElementById('quarter').addEventListener('click', function() {
+            setActiveButton('quarter');
+            loadIncomeStatement(stockSymbol); // Replace 'AAPL' with the desired symbol
+        });
         loadIncomeStatement(stockSymbol);   // Load income statement data
     }
     else if (currentUrl.includes('/ai')) {
