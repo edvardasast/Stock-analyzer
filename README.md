@@ -20,37 +20,39 @@ This project is a Stock Dashboard web application that provides various financia
     ```
 
 2. **Create a virtual environment**:
-    ```bash
-    python -m venv venv
-    ```
+   If need to clean
+   Remove-Item -Recurse -Force venv
+   python -m venv venv
+   
 
-3. **Activate the virtual environment**:
+4. **Activate the virtual environment**:
     - On Windows:
         ```bash
-        venv\Scripts\activate
+        .\venv\Scripts\activate
         ```
     - On macOS/Linux:
         ```bash
         source venv/bin/activate
         ```
 
-4. **Install the dependencies**:
+5. **Install the dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
 
-5. **Create a [.env] file in the root directory of the project and add the following environment variables:
+6. **Create a [.env] file in the root directory of the project and add the following environment variables:
     ```plaintext
     SECRET_KEY=your_secret_key
     OPENAI_API_KEY=your_openai_api_key
     ```
 
-6. **Run the application**:
+7. **Run the application**:
     ```bash
+    $env:FLASK_APP = "main.py"
     flask run
     ```
 
-7. **Open your browser** and navigate to `http://127.0.0.1:5000` to view the application.
+8. **Open your browser** and navigate to `http://127.0.0.1:5000` to view the application.
 
 ## Usage
 
