@@ -57,6 +57,7 @@ function loadPortfolio() {
 
                         switch (event['Type']) {
                             case 'BUY':
+                            case 'BUY - LIMIT':
                             case 'BUY - MARKET':
                                 investedAmount += amount;
                                 stocksAmount += quantity;
@@ -65,6 +66,7 @@ function loadPortfolio() {
                             case 'SELL - MARKET':
                             case 'MERGER - CASH':
                             case 'SELL - LIMIT':
+                            case 'SELL - STOP':
                                 investedAmount -= amount;
                                 stocksAmount -= quantity;
                                 break;
@@ -160,10 +162,10 @@ function loadPortfolio() {
 }
 
 function updateUIAfterLoad(totalPortfolioValue, total_invested, dividends) {
-    document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(2)}`;
-    document.getElementById('total-portfolio-invested').textContent = `$${total_invested.toFixed(2)}`;
-    document.getElementById('portfolio-profit').textContent = `$${(totalPortfolioValue - total_invested).toFixed(2)}`;
-    document.getElementById('portfolio-dividends').textContent = `$${dividends.toFixed(2)}`;
+    document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(0)}`;
+    document.getElementById('total-portfolio-invested').textContent = `$${total_invested.toFixed(0)}`;
+    document.getElementById('portfolio-profit').textContent = `$${(totalPortfolioValue - total_invested).toFixed(0)}`;
+    document.getElementById('portfolio-dividends').textContent = `$${dividends.toFixed(0)}`;
     const ytdButton = document.getElementById('YTDBtn');
     updatePortfolioChart("YTD", ytdButton);
 }

@@ -61,7 +61,7 @@ if not OPENAI_API_KEY:
 data_cache = {}
 
 # Initialize the scheduler
-scheduler = BackgroundScheduler()
+#scheduler = BackgroundScheduler()
 
 # Map ranges to yfinance period parameters
 RANGE_MAPPING = {
@@ -169,6 +169,7 @@ def update_stock_info():
         #enddate = datetime.strptime(first_date, "%Y-%m-%d").date()
         #startdate = enddate - datetime.timedelta(days=365*5) # for 5 years
         for ticker in tickers:
+            print(f"Updating info for {ticker}")
             try:
                 stock = yf.Ticker(ticker)
                 info = stock.info
@@ -217,10 +218,11 @@ def update_stock_info():
                 else:
                     print(f"No info found for {ticker}")
             except Exception as e:
-                #print(f"Error updating info for {ticker}: {e}")
+                print(f"Error updating info for {ticker}: {e}")
                 pass
+        print(f"Stock info update finished")   
 # Add the job to the scheduler
-scheduler.add_job(func=update_stock_info, trigger="interval", minutes=5)
+""" scheduler.add_job(func=update_stock_info, trigger="interval", minutes=5)
 def shutdown_scheduler():
     if scheduler.running:
         scheduler.shutdown(wait=False)
@@ -229,7 +231,7 @@ def start_scheduler():
     logging.info("Starting scheduler...")
     scheduler.start()
     print("Scheduler started.")
-    atexit.register(shutdown_scheduler)
+    atexit.register(shutdown_scheduler) """
 
 def calculate_cagr(revenue_start, revenue_end, years):
     return ((revenue_end / revenue_start) ** (1 / years)) - 1
@@ -281,6 +283,18 @@ def fetch_stock_data(symbol):
         'fast_info': stock.fast_info,
         'dividends': stock.dividends
     }
+    etf = yf.Ticker('QDVE.DE')
+    data = etf.funds_data
+    print("ETF data: ", data.description)
+    print("ETF data: ", data.fund_overview)
+    print("ETF data: ", data.fund_operations)
+    print("ETF data: ", data.asset_classes)
+    print("ETF data: ", data.top_holdings)
+    print("ETF data: ", data.equity_holdings)
+    print("ETF data: ", data.bond_holdings)
+    print("ETF data: ", data.bond_ratings)
+    print("ETF data: ", data.sector_weightings)
+    
     #print("Stock data fetched.", stock.quarterly_financials)
     return data_cache[symbol]
 
@@ -306,11 +320,12 @@ def parse_and_store_statement(file_path):
     def clean_numeric(value):
         if isinstance(value, str):
             # Remove currency symbols and commas
-            value = value.replace('$', '').replace(',', '')
+            value = value.replace('$', '').replace(',', '').replace('€', '').replace('£', '').replace('‚Ç¨', '')
         try:
             return float(value)
         except ValueError:
             return 0.0  # or handle it as you see fit
+    db.session.query(StockHolding).delete()
     for index, row in df.iterrows():
         try:
             holding = StockHolding(
@@ -560,11 +575,11 @@ def get_portfolio_events():
         # Calculate total value by summing up each holding's value on that date
         for holding in holdings:
             if hist.ticker == holding.ticker:
-                if holding.type == 'BUY - MARKET' or holding.type == 'STOCK SPLIT':
+                if holding.type == 'BUY - MARKET' or holding.type == 'STOCK SPLIT' or holding.type == 'BUY - LIMIT' :
                     if holding.date.split('T')[0] <= date:
                         value_by_date[date] += hist.close * holding.quantity
                         invested_by_date[date] += holding.total_amount
-                elif holding.type == 'SELL - MARKET' or holding.type == 'MERGER - CASH' or holding.type == 'SELL - LIMIT':
+                elif holding.type == 'SELL - MARKET' or holding.type == 'MERGER - CASH' or holding.type == 'SELL - LIMIT' or holding.type == 'SELL - STOP':
                     if holding.date.split('T')[0] <= date:
                         value_by_date[date] -= hist.close * holding.quantity
                         invested_by_date[date] -= holding.total_amount
@@ -572,12 +587,8 @@ def get_portfolio_events():
                     if holding.date.split('T')[0] <= date:
                         dividends_by_date[date] += holding.total_amount
     
-    print("value_by_date length: ", len(value_by_date))
-    print("invested_by_date length: ", len(invested_by_date))
-    print("dividends_by_date length: ", len(dividends_by_date))
     # Get a sorted list of all dates from history
     all_dates = sorted(value_by_date.keys())
-    #print("Values dates: ", value_by_date)
     # Initialize the previous day values
     previous_value = 0
     previous_invested = 0
@@ -709,15 +720,12 @@ def get_stock_data():
         cagr_percentage = round(cagr * 100, 2)
         # Extract the operating cash flow and capital expenditures for the last 4 years
         operating_cash_flows = cash_flow_statement.loc['Operating Cash Flow'].values[:4]
-        print("operating_cash_flows: ", operating_cash_flows)
         #print(cash_flow_statement)
 
         try:
             if 'Capital Expenditure' in cash_flow_statement.index:
-                print("Using Capital Expenditure")
                 capex = cash_flow_statement.loc['Capital Expenditure'].fillna(1).infer_objects(copy=False).values[:4]
             elif 'Capital Expenditure Reported' in cash_flow_statement.index:
-                print("Using Capital Expenditure Reported")
                 capex = cash_flow_statement.loc['Capital Expenditure Reported'].fillna(1).infer_objects(copy=False).values[:4]
                 #print("capex: ", capex)
             else:
@@ -750,7 +758,6 @@ def get_stock_data():
         free_cash_flow = stock_info.get('freeCashflow', 0)
         if free_cash_flow != 0:
             price_to_fcf = safe_round((stock_info.get('marketCap', 0)) / free_cash_flow, 2)
-        print(stock_info)
         stock_data_response = {
             'market_cap': format_number(stock_info.get('marketCap', 0)),
             'revenue': format_number(stock_info.get('totalRevenue', 0)),
@@ -820,7 +827,6 @@ def get_income_statement():
             "income_statement_yearly": income_statement_yearly,
             "income_statement_quarterly": income_statement_quarterly,
         }
-        print("response: ", response)
         return jsonify(response)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -1189,8 +1195,8 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         #migrate_history_data()
-
+        #update_stock_info()
         # Start the scheduler in a separate thread
-        scheduler_thread = threading.Thread(target=start_scheduler)
-        scheduler_thread.start()
+        #scheduler_thread = threading.Thread(target=start_scheduler)
+        #scheduler_thread.start()
     app.run(debug=True)
