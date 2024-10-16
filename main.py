@@ -13,6 +13,7 @@ import yfinance as yf
 import pandas as pd
 import threading
 import numpy as np
+import yahooquery as yq
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from openai import OpenAI
@@ -257,6 +258,11 @@ def fetch_stock_data(symbol):
     stock_info = stock.info
     if not stock_info:
         raise ValueError(f"No data found for symbol: {symbol}")
+    if stock_info == {'trailingPegRatio': None}:
+        correctTicker = yq.search(symbol, first_quote=True)
+        symbol = correctTicker['symbol']
+        stock = yf.Ticker(symbol)
+        stock_info = stock.info
 
     data_cache[symbol] = {
         'info': stock_info,
