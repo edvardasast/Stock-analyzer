@@ -43,7 +43,6 @@ function loadPortfolio() {
             let total_current = 0;
             let totalPortfolioValue = 0;
             let dividends = 0;
-            let companyWebsite = "";
             const fetchPromises = [];
 
             Object.entries(portfolioItems).forEach(([ticker, data]) => {
@@ -53,18 +52,29 @@ function loadPortfolio() {
                 if (Array.isArray(data)) {
                     data.forEach(event => {
                         const eventDate = new Date(event['Date']).toISOString().split('T')[0];
-                        if (event['Type'] === 'BUY' || event['Type'] === 'BUY - MARKET') {
-                            investedAmount += parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
-                            stocksAmount += parseFloat(event['Quantity']);
-                        } else if (event['Type'] === 'STOCK SPLIT') {
-                            stocksAmount += parseFloat(event['Quantity']);
-                        } else if (event['Type'] === 'SELL' || event['Type'] === 'SELL - MARKET' || event['Type'] === 'MERGER - CASH' || event['Type'] === 'SELL - LIMIT') {
-                            investedAmount -= parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
-                            stocksAmount -= parseFloat(event['Quantity']);
-                        } else if (event['Type'] === 'MERGER - STOCK') {
-                            stocksAmount += parseFloat(event['Quantity']);
-                        } else if (event['Type'] === 'DIVIDEND') {
-                            dividends += parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
+                        const amount = parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
+                        const quantity = parseFloat(event['Quantity']);
+
+                        switch (event['Type']) {
+                            case 'BUY':
+                            case 'BUY - MARKET':
+                                investedAmount += amount;
+                                stocksAmount += quantity;
+                                break;
+                            case 'SELL':
+                            case 'SELL - MARKET':
+                            case 'MERGER - CASH':
+                            case 'SELL - LIMIT':
+                                investedAmount -= amount;
+                                stocksAmount -= quantity;
+                                break;
+                            case 'STOCK SPLIT':
+                            case 'MERGER - STOCK':
+                                stocksAmount += quantity;
+                                break;
+                            case 'DIVIDEND':
+                                dividends += amount;
+                                break;
                         }
                     });
 
@@ -86,20 +96,23 @@ function loadPortfolio() {
                             const growthLoss = ((currentValue - investedAmount) / investedAmount * 100).toFixed(2);
                             totalPortfolioValue += parseFloat(currentValue);
 
-                            companyWebsite = data.info.website;
+                            const companyWebsite = data.info.website;
+                            const logoUrl = companyWebsite ? `${companyWebsite}/favicon.ico` : '/default-logo.png'; // Fallback logo
+
                             const currentValueClass = currentValue < investedAmount ? 'negative' : 'positive';
                             const growthLossClass = growthLoss < 0 ? 'negative' : 'positive';
-                            let logoUrlStart = `${companyWebsite}/favicon.ico`;
-                            
-                            const portfolioContent = `
+
+                            return `
                                 <div class="portfolio-item">
                                     <div class="portfolio-row">
                                         <div class="portfolio-column holding-column">
                                             <div class="company-logo company-logo-${ticker}">
-                                                <img src="${logoUrlStart}" alt="${data.info.name} Logo">
+                                                <img src="${logoUrl}" alt="${data.info.name} Logo" onerror="this.onerror=null;this.src='/default-logo.png';">
                                             </div>
                                             <div class="portfolio-name">
-                                                <h2>${ticker_name}</h2>
+                                                <a id="ticker-link-${ticker}" data-ticker="${ticker}">
+                                                    <h2>${ticker_name}</h2>
+                                                </a>
                                                 <p>${ticker}</p>
                                             </div>
                                         </div>
@@ -111,7 +124,9 @@ function loadPortfolio() {
                                     </div>
                                 </div>
                             `;
-                            return portfolioContent;
+                        })
+                        .catch(error => {
+                            console.error('Error fetching ticker info:', error);
                         });
 
                     fetchPromises.push(fetchPromise);
@@ -121,36 +136,21 @@ function loadPortfolio() {
             // Wait for all promises to resolve before updating the UI
             Promise.all(fetchPromises).then(portfolioItemsHTML => {
                 portfolioItemsHTML.forEach(itemHTML => {
-                    const portfolioItem = document.createElement('div');
-                    portfolioItem.innerHTML = itemHTML;
-                    portfolioContainer.appendChild(portfolioItem);
+                    if (itemHTML) {
+                        const portfolioItem = document.createElement('div');
+                        portfolioItem.innerHTML = itemHTML;
+                        portfolioContainer.appendChild(portfolioItem);
+                    }
                 });
-                const ytdButton = document.getElementById('YTDBtn');
-                updatePortfolioChart("YTD", ytdButton);
 
-                // Update total portfolio values
-                document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(2)}`;
-                document.getElementById('total-portfolio-invested').textContent = `$${total_invested.toFixed(2)}`;
-                const portfolioProfit = totalPortfolioValue - total_invested;
-                document.getElementById('portfolio-profit').textContent = `$${portfolioProfit.toFixed(2)}`;
-                document.getElementById('portfolio-dividends').textContent = `$${dividends.toFixed(2)}`;
+                updateUIAfterLoad(totalPortfolioValue, total_invested, dividends);
 
-
-                // Add event listeners for time frame buttons
-                document.getElementById('1MBtn').addEventListener('click', function () {
-                    updatePortfolioChart('1M', this);
-                });
-                document.getElementById('1YBtn').addEventListener('click', function () {
-                    updatePortfolioChart('1Y', this);
-                });
-                document.getElementById('YTDBtn').addEventListener('click', function () {
-                    updatePortfolioChart('YTD', this);
-                });
-                document.getElementById('MAXBtn').addEventListener('click', function () {
-                    updatePortfolioChart('MAX', this);
-                });
                 document.getElementById('loading-container').style.display = 'none';
                 document.getElementById('portfolio_container').style.display = 'block';
+
+                // Add event listeners for ticker links and time frame buttons
+                addTickerLinkListeners();
+                addTimeFrameButtonListeners();
             });
         })
         .catch(error => {
@@ -158,6 +158,51 @@ function loadPortfolio() {
             portfolioContainer.innerHTML = '<p>Failed to load portfolio. Please try again later.</p>';
         });
 }
+
+function updateUIAfterLoad(totalPortfolioValue, total_invested, dividends) {
+    document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(2)}`;
+    document.getElementById('total-portfolio-invested').textContent = `$${total_invested.toFixed(2)}`;
+    document.getElementById('portfolio-profit').textContent = `$${(totalPortfolioValue - total_invested).toFixed(2)}`;
+    document.getElementById('portfolio-dividends').textContent = `$${dividends.toFixed(2)}`;
+    const ytdButton = document.getElementById('YTDBtn');
+    updatePortfolioChart("YTD", ytdButton);
+}
+
+function addTickerLinkListeners() {
+    document.querySelectorAll('[id^=ticker-link-]').forEach(tickerLink => {
+        tickerLink.addEventListener('click', function () {
+            const ticker = this.getAttribute('data-ticker');
+            setCookie('stockSymbol', ticker, 7);
+            fetch(`/api/renew_data_cache?symbol=${ticker}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Data cache renewed successfully');
+                    } else {
+                        console.error('Error renewing data cache:', data.error);
+                    }
+                })
+                .catch(error => console.error('Error renewing data cache:', error));
+            window.location.href = `/stock_data`;
+        });
+    });
+}
+
+function addTimeFrameButtonListeners() {
+    document.getElementById('1MBtn').addEventListener('click', function () {
+        updatePortfolioChart('1M', this);
+    });
+    document.getElementById('1YBtn').addEventListener('click', function () {
+        updatePortfolioChart('1Y', this);
+    });
+    document.getElementById('YTDBtn').addEventListener('click', function () {
+        updatePortfolioChart('YTD', this);
+    });
+    document.getElementById('MAXBtn').addEventListener('click', function () {
+        updatePortfolioChart('MAX', this);
+    });
+}
+
 function formatDateToYYYYMMDD(date) {
     let year = date.getFullYear();
     let month = ('0' + (date.getMonth() + 1)).slice(-2); // Months are zero-based
@@ -196,7 +241,7 @@ function updatePortfolioChart(timeFrame, button) {
 
     const dates = [];
     const values = [];
-    const dataset = [];
+    const dividends = [];
 
     // Format the date to YYYY-MM-DD before sending
     let formattedDate = formatDateToYYYYMMDD(historyStartDate);
@@ -207,88 +252,84 @@ function updatePortfolioChart(timeFrame, button) {
                 console.error(`Error from API: ${data.error}`);
                 return;
             }
-            //console.log(data);
-            const endDate = new Date(); // Current date
-            let totalInvested = 0;
-            if (data.holdings && data.holdings.length > 0) {
-                data.holdings.forEach(event => {
-                    try {
-                        const eventDate = new Date(event['date']);
-                        if (event['type'] === 'BUY' || event['type'] === 'BUY - MARKET') {
-                            totalInvested += parseFloat(event['total_amount']);
-                            if (!isNaN(eventDate) && eventDate >= historyStartDate) {
-                                dates.push(eventDate.toISOString().split('T')[0]);
-                                values.push(totalInvested);
-                            }
-                        } else if (event['type'] === 'SELL' || event['type'] === 'SELL - MARKET' || event['type'] === 'MERGER - CASH') {
-                            totalInvested -= parseFloat(event['total_amount']);
-                            if (!isNaN(eventDate) && eventDate >= historyStartDate) {
-                                dates.push(eventDate.toISOString().split('T')[0]);
-                                values.push(totalInvested);
-                            }
-                        }
-                    } catch (error) {
-                        console.error(`Error parsing date: ${event['date']}`, error);
-                    }
-                });
-                const historyDates = data.history.map(entry => entry.date);
-                const historyValues = data.history.map(entry => entry.totalValue);
-                const historyInvested = data.history.map(entry => entry.totalInvested);
-
-                // Only update the chart after processing all the data
-                if (dates.length > 0 && values.length > 0) {
-                    portfolioChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: historyDates,
-                            datasets: [{
-                                label: 'Invested',
-                                data: historyInvested,
-                                borderColor: 'rgba(75, 192, 192, 1)',
-                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                fill: false,
-                                tension: 0,
-                                pointRadius: 0,  // Set point radius to 0 to hide points
-                                pointHoverRadius: 0,  // Ensure points don’t appear on hover
-                            },
-                            {
-                                label: 'Current Value', // Label for the new dataset
-                                data: historyValues, // Data for the new dataset
-                                borderColor: 'rgba(21, 88, 38, 1)', // Styling for the new dataset
-                                backgroundColor: 'rgba(21, 88, 38, 0.2)',
-                                fill: true,
-                                tension: 0.1,
-                                pointRadius: 0,  // Set point radius to 0 to hide points
-                                pointHoverRadius: 0,  // Ensure points don’t appear on hover
-                            }]
+            const historyDates = data.history.map(entry => entry.date);
+            const historyValues = data.history.map(entry => entry.totalValue);
+            const historyInvested = data.history.map(entry => entry.totalInvested);
+            const historyDividends = data.history.map(entry => entry.dividends || 0);
+            // Only update the chart after processing all the data
+            if (historyDates.length > 0 && historyValues.length > 0) {
+                portfolioChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: historyDates,
+                        datasets: [{
+                            label: 'Invested',
+                            data: historyInvested,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            fill: false,
+                            tension: 0,
+                            pointRadius: 0,  // Set point radius to 0 to hide points
+                            pointHoverRadius: 0,  // Ensure points don’t appear on hover
                         },
-                        options: {
-                            scales: {
-                                x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'month'
-                                    },
-                                    title: {
-                                        display: true,
-                                        text: 'Date'
+                        {
+                            label: 'Current Value', // Label for the new dataset
+                            data: historyValues, // Data for the new dataset
+                            borderColor: 'rgba(21, 88, 38, 1)', // Styling for the new dataset
+                            backgroundColor: 'rgba(21, 88, 38, 0.2)',
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 0,  // Set point radius to 0 to hide points
+                            pointHoverRadius: 0,  // Ensure points don’t appear on hover
+                        },
+                        {
+                            label: 'Dividends', // Label for the new dataset
+                            data: historyDividends, // Data for the new dataset
+                            borderColor: 'rgba(255, 159, 64, 1)', // Styling for the new dataset
+                            backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                            fill: false,
+                            tension: 0.1,
+                            yAxisID: 'y1', // Use a second y-axis for profit margin
+                            pointRadius: 0,  // Set point radius to 0 to hide points
+                            pointHoverRadius: 0,  // Ensure points don’t appear on hover
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'month'
+                                },
+                                title: {
+                                    display: true
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    callback: function (value) {
+                                        return `$${value / 1000}K`; // Append '%' for profit margin
                                     }
                                 },
-                                y: {
-                                    title: {
-                                        display: true,
-                                        text: 'Value'
-                                    },
-                                    beginAtZero: false
+                                title: {
+                                    display: true
+                                },
+                                beginAtZero: false
+                            },
+                            y1: {
+                                beginAtZero: true,
+                                position: 'right', // Position the y1 axis on the right
+                                ticks: {
+                                    callback: function (value) {
+                                        return `$${value}`; // Append '%' for profit margin
+                                    }
                                 }
                             }
                         }
-                    });
-                } else {
-                    console.error('No valid data to display in chart');
-                }
+                    }
+                });
             } else {
-                console.error('No portfolio data received from API');
+                console.error('No valid data to display in chart');
             }
         })
         .catch(error => {
@@ -309,14 +350,15 @@ function fetchStockData(symbol) {
                 alert(data.error);
                 return;
             }
+            console.log(data)
             const element = document.getElementById('market-cap');
             if (element) {
                 // Safe to manipulate the element
                 // Left Column Data
-                document.getElementById("market-cap").textContent = `$${data.market_cap}T`;
-                document.getElementById("revenue").textContent = `$${data.revenue}B`;
-                document.getElementById("net-income").textContent = `$${data.net_income}B`;
-                document.getElementById("4yr_avg_net_income").textContent = `$${data.four_year_avg_net_income}B`;
+                document.getElementById("market-cap").textContent = `$${data.market_cap}`;
+                document.getElementById("revenue").textContent = `$${data.revenue}`;
+                document.getElementById("net-income").textContent = `$${data.net_income}`;
+                document.getElementById("4yr_avg_net_income").textContent = `$${data.four_year_avg_net_income}`;
                 document.getElementById("pe").textContent = data.pe_ratio;
                 document.getElementById("ps-ratio").textContent = data.ps_ratio;
                 document.getElementById("profit-margin").textContent = `${data.profit_margin}%`;
@@ -325,8 +367,8 @@ function fetchStockData(symbol) {
                 document.getElementById("3yr-revenue-growth").textContent = `${data.three_year_revenue_growth}%`;
 
                 // Middle Column Data
-                document.getElementById("fcf").textContent = `$${data.free_cash_flow}B`;
-                document.getElementById("4yr-fcf").textContent = `$${data.four_year_avg_fcf}B`;
+                document.getElementById("fcf").textContent = `$${data.free_cash_flow}`;
+                document.getElementById("4yr-fcf").textContent = `$${data.four_year_avg_fcf}`;
                 document.getElementById("price-to-fcf").textContent = data.price_to_fcf;
                 document.getElementById("dividend-yield").textContent = `${data.dividend_yield}%`;
                 document.getElementById("dividends-paid").textContent = `$${data.dividends_paid}B`;
@@ -751,7 +793,7 @@ function createIncomeStatementChart(labels, revenueData, netIncomeData, profitMa
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return `$${value}B`; // Append '$' and 'B' for billions
                         }
                     }
@@ -760,7 +802,7 @@ function createIncomeStatementChart(labels, revenueData, netIncomeData, profitMa
                     beginAtZero: true,
                     position: 'right', // Position the y1 axis on the right
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return `${value}%`; // Append '%' for profit margin
                         }
                     }
@@ -900,7 +942,7 @@ function createBalanceSheetChart(labels, assetsData, liabilitiesData, debtToAsse
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return `$${value}B`; // Append '$' and 'B' for billions
                         }
                     }
@@ -909,7 +951,7 @@ function createBalanceSheetChart(labels, assetsData, liabilitiesData, debtToAsse
                     beginAtZero: true,
                     position: 'right', // Position the y1 axis on the right
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return `${value}%`; // Append '%' for profit margin
                         }
                     }
@@ -976,7 +1018,7 @@ function loadCashFlow(symbol) {
             const financinggData = timePeriods.map(period => formatToBillions(cashFlowData[period]['Financing Cash Flow'] || 0));
             // Create the chart
             createCashFlowChart(timePeriods, operatingData, investingData, financinggData);
-          // Update the table body
+            // Update the table body
         })
         .catch(error => console.error('Error fetching cash flow:', error));
 }
@@ -1031,7 +1073,7 @@ function createCashFlowChart(labels, operatingData, investingData, financinggDat
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return `$${value}B`; // Append '$' and 'B' for billions
                         }
                     }
@@ -1478,7 +1520,9 @@ document.addEventListener('DOMContentLoaded', function () {
         loadDividends();
     }
     else if (currentUrl.includes('/portfolio')) {
+        console.log('Portfolio page');
         document.getElementById('upload_statement').addEventListener('click', function () {
+            console
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = '.csv';
@@ -1505,6 +1549,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
             input.click();
         });
+        
         loadPortfolio(); // Load portfolio
     }
     else if (currentUrl.includes('/news')) {
@@ -1522,24 +1567,24 @@ document.addEventListener('DOMContentLoaded', function () {
     else if (currentUrl.includes('/cash_flow')) {
         loadCashFlow(stockSymbol); // Load cash flow data
         // Add event listeners to the buttons
-        document.getElementById('year').addEventListener('click', function() {
+        document.getElementById('year').addEventListener('click', function () {
             setActiveButton('year');
             loadCashFlow(stockSymbol); // Replace 'AAPL' with the desired symbol
         });
 
-        document.getElementById('quarter').addEventListener('click', function() {
+        document.getElementById('quarter').addEventListener('click', function () {
             setActiveButton('quarter');
             loadCashFlow(stockSymbol); // Replace 'AAPL' with the desired symbol
         });
     }
     else if (currentUrl.includes('/balance_sheet')) {
         // Add event listeners to the buttons
-        document.getElementById('year').addEventListener('click', function() {
+        document.getElementById('year').addEventListener('click', function () {
             setActiveButton('year');
             loadBalanceSheet(stockSymbol); // Replace 'AAPL' with the desired symbol
         });
 
-        document.getElementById('quarter').addEventListener('click', function() {
+        document.getElementById('quarter').addEventListener('click', function () {
             setActiveButton('quarter');
             loadBalanceSheet(stockSymbol); // Replace 'AAPL' with the desired symbol
         });
@@ -1547,19 +1592,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     else if (currentUrl.includes('/income_statement')) {
         // Add event listeners to the buttons
-        document.getElementById('year').addEventListener('click', function() {
+        document.getElementById('year').addEventListener('click', function () {
             setActiveButton('year');
             loadIncomeStatement(stockSymbol); // Replace 'AAPL' with the desired symbol
         });
 
-        document.getElementById('quarter').addEventListener('click', function() {
+        document.getElementById('quarter').addEventListener('click', function () {
             setActiveButton('quarter');
             loadIncomeStatement(stockSymbol); // Replace 'AAPL' with the desired symbol
         });
         loadIncomeStatement(stockSymbol);   // Load income statement data
     }
     else if (currentUrl.includes('/ai')) {
-        loadAIOpinion(stockSymbol, 'False');   // Load income statement data
+        //loadAIOpinion(stockSymbol, 'False');   // Load income statement data
     }
     else if (currentUrl.includes('/stock_data')) {
         fetchStockData(stockSymbol); // Fetch stock data

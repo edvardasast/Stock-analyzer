@@ -43,6 +43,9 @@ db = SQLAlchemy(app)
 UPLOAD_FOLDER = 'data'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+
+pd.set_option('future.no_silent_downcasting', True)
+
 # OpenAI API Key
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 client = OpenAI(
@@ -464,6 +467,7 @@ def home():
 @app.route("/stock_data")
 def metrics():
     return render_template("stock_data.html")
+
 @app.route('/database_view')
 def database_view():
     return render_template("database_view.html")
@@ -545,13 +549,14 @@ def get_portfolio_events():
     # Prepare a dictionary to store totalValue for each date
     value_by_date = {}
     invested_by_date = {}
+    dividends_by_date = {}
     # Populate the value_by_date dictionary with total values from the holding's historical prices
     for hist in history:
         date = hist.date.split('T')[0] 
         if date not in value_by_date:
             value_by_date[date] = 0
             invested_by_date[date] = 0
-        
+            dividends_by_date[date] = 0
         # Calculate total value by summing up each holding's value on that date
         for holding in holdings:
             if hist.ticker == holding.ticker:
@@ -563,12 +568,20 @@ def get_portfolio_events():
                     if holding.date.split('T')[0] <= date:
                         value_by_date[date] -= hist.close * holding.quantity
                         invested_by_date[date] -= holding.total_amount
+                elif holding.type == 'DIVIDEND':
+                    if holding.date.split('T')[0] <= date:
+                        dividends_by_date[date] += holding.total_amount
+    
+    print("value_by_date length: ", len(value_by_date))
+    print("invested_by_date length: ", len(invested_by_date))
+    print("dividends_by_date length: ", len(dividends_by_date))
     # Get a sorted list of all dates from history
     all_dates = sorted(value_by_date.keys())
     #print("Values dates: ", value_by_date)
     # Initialize the previous day values
     previous_value = 0
     previous_invested = 0
+    previous_dividends = 0
 
     # Accumulate values for days without transactions
     for date in all_dates:
@@ -577,16 +590,20 @@ def get_portfolio_events():
             value_by_date[date] = previous_value
         if date not in invested_by_date:
             invested_by_date[date] = previous_invested
+        if date not in dividends_by_date:
+            dividends_by_date[date] = previous_dividends
         
         # Update previous values for the next iteration
         previous_value = value_by_date[date]
         previous_invested = invested_by_date[date]
+        previous_dividends = dividends_by_date[date]
+
     #print("Invested by date: ", invested_by_date)
      # Create the history object with accumulated values
     historyObject = [{"date": date, 
                       "totalValue": value_by_date[date],
-                      "totalInvested": invested_by_date[date]}
-                     for date in all_dates]
+                      "totalInvested": invested_by_date[date],
+                      "dividends":dividends_by_date[date]} for date in all_dates]
     # Format the response into a list of {'date': 'YYYY-MM-DD', 'totalValue': value} objects
     response = {
         'holdings': [holding.to_dict() for holding in holdings],
@@ -639,6 +656,19 @@ def get_portfolio_tickers_info():
                 return jsonify({"error": "No stock info found"}), 404
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+def format_number(value):
+    if value >= 1e12:
+        # Trillions
+        return f"{round(value / 1e12, 2)}T"
+    elif value >= 1e9:
+        # Billions
+        return f"{round(value / 1e9, 2)}B"
+    elif value >= 1e6:
+        # Millions
+        return f"{round(value / 1e6, 2)}M"
+    else:
+        # Less than a million, return the raw value
+        return str(value)
     
 @app.route("/api/stock_data")
 def get_stock_data():
@@ -660,11 +690,11 @@ def get_stock_data():
         net_incomes = financials.loc['Net Income'].values[:4]
         revenues = financials.loc['Total Revenue'].values[:4]
         # Convert the values to billions and round to 2 decimal places
-        net_incomes_billion = [round(net_income / 1e9, 2) for net_income in net_incomes]
-        revenues_billion = [round(revenue / 1e9, 2) for revenue in revenues]
+        net_incomes = [round(net_income, 2) for net_income in net_incomes]
+        revenues = [round(revenue, 2) for revenue in revenues]
         # Calculate the 4-year total net income and total revenue
-        total_net_income = round(sum(net_incomes_billion), 2)
-        total_revenue = round(sum(revenues_billion), 2)
+        total_net_income = round(sum(net_incomes), 2)
+        total_revenue = round(sum(revenues), 2)
         # Ensure there are enough data points to calculate the 3-year compound growth
         if len(revenues) < 4:
             return jsonify({"error": "Not enough data to calculate 3-year compound revenue growth."}), 400
@@ -679,31 +709,62 @@ def get_stock_data():
         cagr_percentage = round(cagr * 100, 2)
         # Extract the operating cash flow and capital expenditures for the last 4 years
         operating_cash_flows = cash_flow_statement.loc['Operating Cash Flow'].values[:4]
-        capex = cash_flow_statement.loc['Capital Expenditure'].values[:4]
+        print("operating_cash_flows: ", operating_cash_flows)
+        #print(cash_flow_statement)
+
+        try:
+            if 'Capital Expenditure' in cash_flow_statement.index:
+                print("Using Capital Expenditure")
+                capex = cash_flow_statement.loc['Capital Expenditure'].fillna(1).infer_objects(copy=False).values[:4]
+            elif 'Capital Expenditure Reported' in cash_flow_statement.index:
+                print("Using Capital Expenditure Reported")
+                capex = cash_flow_statement.loc['Capital Expenditure Reported'].fillna(1).infer_objects(copy=False).values[:4]
+                #print("capex: ", capex)
+            else:
+                print("No capex data found.")
+                capex = [1, 1, 1, 1]
+        except Exception as e:
+            print(f"Error fetching capex data for {symbol}: {e}")
+            return jsonify({"error": f"Error fetching data: {e}"}), 500
+        
         # Calculate free cash flow for the last 4 years
-        free_cash_flows = [op_cf + capex_val for op_cf, capex_val in zip(operating_cash_flows, capex)]
-        free_cash_flows_billion = [round(fcf / 1e9, 2) for fcf in free_cash_flows]
+        #print("Calculate free cash flow for the last 4 years")
+        try:
+            free_cash_flows = [op_cf + capex_val for op_cf, capex_val in zip(operating_cash_flows, capex)]
+            #print("free_cash_flows: ", free_cash_flows)
+            free_cash_flows = [fcf for fcf in free_cash_flows]
+        except Exception as e:
+            #print(f"Error calculating free cash flow: {e}")
+            return jsonify({"error": f"Error calculating free cash flow: {e}"}), 500
         # Dividends Paid
         if 'Cash Dividends Paid' in cash_flow_statement.index:
+            #print("Cash Dividends Paid")
             dividend_paid = abs(cash_flow_statement.loc['Cash Dividends Paid'].values[0])
         else:
             dividend_paid = 0
         # Calculate the 4-year average free cash flow
-        avg_free_cash_flow = round(sum(free_cash_flows_billion) / len(free_cash_flows_billion), 2)
+        #print("free_cash_flows_billion: ", free_cash_flows_billion)
+        avg_free_cash_flow = round(sum(free_cash_flows) / len(free_cash_flows), 2)
+        #print("avg_free_cash_flow: ", avg_free_cash_flow)
+        price_to_fcf = 0
+        free_cash_flow = stock_info.get('freeCashflow', 0)
+        if free_cash_flow != 0:
+            price_to_fcf = safe_round((stock_info.get('marketCap', 0)) / free_cash_flow, 2)
+        print(stock_info)
         stock_data_response = {
-            'market_cap': round(stock_info.get('marketCap', 0) / 1e12, 2),
-            'revenue': round(stock_info.get('totalRevenue', 0) / 1e9, 2),
-            'net_income': round(stock_info.get('netIncomeToCommon', 0) / 1e9, 2),
-            'four_year_avg_net_income': round(sum(net_incomes_billion) / len(net_incomes_billion), 2),
+            'market_cap': format_number(stock_info.get('marketCap', 0)),
+            'revenue': format_number(stock_info.get('totalRevenue', 0)),
+            'net_income': format_number(stock_info.get('netIncomeToCommon', 0)),
+            'four_year_avg_net_income': format_number((sum(net_incomes) / len(net_incomes))),
             'pe_ratio': safe_round(stock_info.get('trailingPE', 'N/A'), 2),
             'ps_ratio': safe_round(stock_info.get('priceToSalesTrailing12Months', 'N/A'), 2),
             'profit_margin': round(stock_info.get('profitMargins', 0) * 100, 2),
             'four_year_profit_margin': round((total_net_income / total_revenue) * 100, 2),
             'gross_profit_margin': round(stock_info.get('grossMargins', 0) * 100, 2),
             'three_year_revenue_growth': cagr_percentage,
-            'free_cash_flow': round(stock_info.get('freeCashflow', 0) / 1e9, 2),
-            'four_year_avg_fcf': avg_free_cash_flow,
-            'price_to_fcf': safe_round(((stock_info.get('marketCap', 0) / 1e9) / (stock_info.get('freeCashflow', 0) / 1e9)), 2),
+            'free_cash_flow': format_number(stock_info.get('freeCashflow', 0)),
+            'four_year_avg_fcf': format_number(avg_free_cash_flow),
+            'price_to_fcf': format_number(price_to_fcf),
             'dividend_yield': round(stock_info.get('dividendYield', 0) * 100, 2),
             'dividends_paid': round(dividend_paid / 1e9, 2),
             'five_year_average_dividend_yield': safe_round(stock_info.get('fiveYearAvgDividendYield', 0), 2),
