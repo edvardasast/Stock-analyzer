@@ -7,15 +7,13 @@
 <!-- Chart with Filters for Time Ranges -->
 <div class="chart-container my-4">
     <div class="btn-group" role="group" aria-label="Time Range" id="timeRangeButtons">
-        <button type="button" class="btn btn-secondary" onclick="updateChart('1W', this, upgradesDowngradesData)">1W</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('1M', this, upgradesDowngradesData)">1M</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('3M', this, upgradesDowngradesData)">3M</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('6M', this, upgradesDowngradesData)">6M</button>
-        <button id="ytdBtn"  type="button" class="btn btn-secondary" onclick="updateChart('YTD', this, upgradesDowngradesData)">YTD</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('1Y', this, upgradesDowngradesData)">1Y</button>
-        <button id="fiveYearBtn" type="button" class="btn btn-secondary" onclick="updateChart('5Y', this, upgradesDowngradesData)">5Y</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('10Y', this, upgradesDowngradesData)">10Y</button>
-        <button type="button" class="btn btn-secondary" onclick="updateChart('MAX', this, upgradesDowngradesData)">MAX</button>
+        <button id="1WBtn" type="button" class="btn btn-secondary">1W</button>
+        <button id="1MBtn" type="button" class="btn btn-secondary">1M</button>
+        <button id="3MBtn" type="button" class="btn btn-secondary">3M</button>
+        <button id="6MBtn" type="button" class="btn btn-secondary">6M</button>
+        <button id="ytdBtn" type="button" class="btn btn-secondary">YTD</button>
+        <button id="1YBtn" type="button" class="btn btn-secondary">1Y</button>
+        <button id="maxBtn" type="button" class="btn btn-secondary">MAX</button>
     </div>
     <canvas id="priceChart"></canvas>
 </div>

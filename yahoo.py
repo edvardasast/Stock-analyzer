@@ -10,18 +10,25 @@ aapl.summary_detail
 df = aapl.history(period='5y', interval='1d')
 #print(aapl.news(5))
 #print(aapl.summary_detail)
-##print(df)
+print("Balance sheet" ,aapl.balance_sheet)
 
 try:
-    etf = yf.Ticker("WRK")
+    etf = yf.Ticker("qdve.de")
     info = etf.info
+    fast_info = etf.fast_info
+    dividends = etf.dividends
+    news = etf.news
+    print("ETF dividends", dividends)
+    print("ETF news", news)
+    print("ETF fast info", fast_info)
+    print("ETF info", info)
     # Check if info is not equal to {'trailingPegRatio': None}
     if info != {'trailingPegRatio': None}:
         print("ETF info is valid:", info)
     else:
         data = yq.search("qdve", first_quote=True)
         symbol = data['symbol']
-        print(symbol)
+        print(data)
 
     print("Printing info", etf.info)
 except HTTPError as http_err:

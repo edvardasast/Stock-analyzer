@@ -14,10 +14,13 @@ import pandas as pd
 import threading
 import numpy as np
 import yahooquery as yq
+from yahooquery import Ticker
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from openai import OpenAI
 from dotenv import load_dotenv
+from flask_socketio import SocketIO, emit
+
 
 # Custom modules (ensure these are available in your project)
 from utils.gov_scraper import get_yearly_report, get_quarterly_report
@@ -46,6 +49,10 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 
 pd.set_option('future.no_silent_downcasting', True)
+
+
+# Initialize Flask-SocketIO
+socketio = SocketIO(app)
 
 # OpenAI API Key
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -135,25 +142,6 @@ class StockHistory(db.Model):
             'open': self.open,
             'volume': self.volume
         }
-# Helper Functions
-def migrate_history_data():
-    stock_infos = StockInfo.query.all()
-    for stock_info in stock_infos:
-        history = stock_info.history
-        if history:
-            for entry in history:
-                stock_history = StockHistory(
-                    ticker=stock_info.ticker,
-                    date=entry['Date'],
-                    close=entry['Close'],
-                    high=entry['High'],
-                    low=entry['Low'],
-                    open=entry['Open'],
-                    volume=entry['Volume']
-                )
-                db.session.add(stock_history)
-    db.session.commit()
-    print("Migration completed.")
 
 def update_stock_info():
     with app.app_context():
@@ -170,10 +158,39 @@ def update_stock_info():
         #enddate = datetime.strptime(first_date, "%Y-%m-%d").date()
         #startdate = enddate - datetime.timedelta(days=365*5) # for 5 years
         for ticker in tickers:
+            #if ticker != "QDVE":
+            #    continue
             print(f"Updating info for {ticker}")
+            socketio.emit('update', {'message': f"Updating info for {ticker}"})
+
             try:
                 stock = yf.Ticker(ticker)
                 info = stock.info
+                if info == {'trailingPegRatio': None}:
+                    print("Correcting ticker... ", info)
+                    correctTicker = yq.search(ticker, first_quote=True)
+                    print("Corrected ticker: ", correctTicker)
+                    new_ticker = correctTicker['symbol']
+                    # Update the ticker in the StockHolding database
+                    try:
+                        # Query for records with the old ticker
+                        holdings_to_update = StockHolding.query.filter_by(ticker=ticker).all()
+                        
+                        # Update the ticker for these records
+                        for holding in holdings_to_update:
+                            holding.ticker = new_ticker
+                        
+                        # Commit the changes to the database
+                        db.session.commit()
+                        print(f"Updated {len(holdings_to_update)} records with new ticker: {new_ticker}")
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"Error updating ticker in database: {e}")
+    
+                    stock = yf.Ticker(new_ticker)
+                    info = stock.info
+                    ticker = new_ticker
+                    print("Corrected info: ", info)
                 history = stock.history(start=first_date, end=enddate, interval="1d")
                 history = history.reset_index()
                 history['Date'] = history['Date'].apply(lambda x: x.isoformat())
@@ -210,6 +227,7 @@ def update_stock_info():
                     if stock_info_entry:
                         # Update existing entry
                         stock_info_entry.info = info
+
                     else:
                         # Create new entry
                         stock_info_entry = StockInfo(ticker=ticker, info=info)
@@ -221,7 +239,8 @@ def update_stock_info():
             except Exception as e:
                 print(f"Error updating info for {ticker}: {e}")
                 pass
-        print(f"Stock info update finished")   
+        print(f"Stock info update finished")
+        return {"success": True}   
 # Add the job to the scheduler
 """ scheduler.add_job(func=update_stock_info, trigger="interval", minutes=5)
 def shutdown_scheduler():
@@ -258,15 +277,43 @@ def fetch_stock_data(symbol):
     print("Fetching stock data...", symbol)
     stock = yf.Ticker(symbol)
     stock_info = stock.info
+    print("Stock info: ", stock_info)
     if not stock_info:
         raise ValueError(f"No data found for symbol: {symbol}")
     if stock_info == {'trailingPegRatio': None}:
+        print("Correcting symbol...", stock_info)
         correctTicker = yq.search(symbol, first_quote=True)
         symbol = correctTicker['symbol']
+        print("Corrected symbol: ", symbol)
         stock = yf.Ticker(symbol)
         stock_info = stock.info
-
-    data_cache[symbol] = {
+    if "." in symbol:
+        data_cache[symbol] = {
+        'info': stock_info,
+        'financials': pd.DataFrame(),
+        'quarterly_financials':  pd.DataFrame(),
+        'balance_sheet':  pd.DataFrame(),
+        'quarterly_balance_sheet':  pd.DataFrame(),
+        'cash_flow':  pd.DataFrame(),
+        'quarterly_cash_flow':  pd.DataFrame(),
+        'history': stock.history(period='5Y'),
+        'analyst_price_targets':  pd.DataFrame(),
+        'earnings_estimate':  pd.DataFrame(),
+        'revenue_estimate':  pd.DataFrame(),
+        'earnings_history':  pd.DataFrame(),
+        'eps_trend':  pd.DataFrame(),
+        'eps_revisions':  pd.DataFrame(),
+        'growth_estimates':  pd.DataFrame(),
+        'recommendations':  pd.DataFrame(),
+        'recommendations_summary':  pd.DataFrame(),
+        'upgrades_downgrades':  pd.DataFrame(),
+        'news': stock.news,
+        'fast_info': stock.fast_info,
+        'dividends': stock.dividends
+        }
+    else:
+        print("ELSE...", symbol)
+        data_cache[symbol] = {
         'info': stock_info,
         'financials': stock.financials,
         'quarterly_financials': stock.quarterly_financials,
@@ -289,20 +336,24 @@ def fetch_stock_data(symbol):
         'fast_info': stock.fast_info,
         'dividends': stock.dividends
     }
-    etf = yf.Ticker('QDVE.DE')
-    data = etf.funds_data
-    print("ETF data: ", data.description)
-    print("ETF data: ", data.fund_overview)
-    print("ETF data: ", data.fund_operations)
-    print("ETF data: ", data.asset_classes)
-    print("ETF data: ", data.top_holdings)
-    print("ETF data: ", data.equity_holdings)
-    print("ETF data: ", data.bond_holdings)
-    print("ETF data: ", data.bond_ratings)
-    print("ETF data: ", data.sector_weightings)
     
     #print("Stock data fetched.", stock.quarterly_financials)
     return data_cache[symbol]
+
+def calculate_quantity(group):
+    buy_market = group[group['type'] == 'BUY - MARKET']['quantity'].sum()
+    buy_limit = group[group['type'] == 'BUY - LIMIT']['quantity'].sum()
+    buy_stop = group[group['type'] == 'BUY - STOP']['quantity'].sum()
+    stock_split = group[group['type'] == 'STOCK SPLIT']['quantity'].sum()
+    merger_stock = group[group['type'] == 'MERGER - STOCK']['quantity'].sum()
+    buy_quantity = buy_market + buy_limit + buy_stop + stock_split + merger_stock
+    sell_market = group[group['type'] == 'SELL - MARKET']['quantity'].sum()
+    sell_limit = group[group['type'] == 'SELL - LIMIT']['quantity'].sum()
+    sell_stop = group[group['type'] == 'SELL - STOP']['quantity'].sum()
+    merger_cash = group[group['type'] == 'MERGER - CASH']['quantity'].sum()
+    sell_quantity = sell_market + sell_limit + sell_stop + merger_cash
+
+    return buy_quantity - sell_quantity
 
 def parse_and_store_statement(file_path):
     df = pd.read_csv(file_path)
@@ -331,8 +382,22 @@ def parse_and_store_statement(file_path):
             return float(value)
         except ValueError:
             return 0.0  # or handle it as you see fit
+    
+     # Calculate total quantity for each ticker
+    ticker_totals = df.groupby('ticker').apply(calculate_quantity)
+    print("Ticker Totals:")
+    for ticker, total in ticker_totals.items():
+        print(f"{ticker}: {total}")
+    # Filter rows where total quantity for the ticker is greater than 0
+    valid_tickers = ticker_totals[ticker_totals > 0.001].index
+    print("Valid Tickers:")
+    print(valid_tickers)
+    df_filtered = df[df['ticker'].isin(valid_tickers)]
+    print("Filtered DataFrame:")
+    print(df_filtered)
     db.session.query(StockHolding).delete()
-    for index, row in df.iterrows():
+
+    for index, row in df_filtered.iterrows():
         try:
             holding = StockHolding(
                 date=row['date'],
@@ -347,9 +412,15 @@ def parse_and_store_statement(file_path):
             db.session.add(holding)
         except Exception as e:
             print(f"Error processing row {index}: {e}")
+    db.session.query(StockHistory).delete()
+    db.session.query(StockInfo).delete()
     db.session.commit()
+    response = update_stock_info()
     print("Portfolio data saved to the database.")
-
+    if response['success']:
+        return {'success': True}
+    else:
+        return {'success': False, 'error': 'Error updating stock info'}
 
 def calculate_roic(financials, balance_sheet):
     latest_period = financials.columns[0]
@@ -503,8 +574,11 @@ def upload_file():
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
-        parse_and_store_statement(file_path)
-        return jsonify({'success': True}), 200
+        response = parse_and_store_statement(file_path)
+        if response['success']:
+            return jsonify(response), 200
+        else:
+            return jsonify(response), 400
 
 @app.route('/portfolio')
 def portfolio():
@@ -562,7 +636,7 @@ def get_portfolio_events():
     print("start_date: ", start_date) 
     # Fetch all stock holdings and their history from the database
     holdings = StockHolding.query.all()
-    history = StockHistory.query.filter(StockHistory.date >= start_date).all()
+    history = StockHistory.query.filter(StockHistory.date >= start_date).order_by(StockHistory.date.asc()).all()
 
     if not holdings:
         return jsonify({"error": "No portfolio data found"}), 404
@@ -574,6 +648,7 @@ def get_portfolio_events():
     # Populate the value_by_date dictionary with total values from the holding's historical prices
     for hist in history:
         date = hist.date.split('T')[0] 
+        #print("date: ", date)
         if date not in value_by_date:
             value_by_date[date] = 0
             invested_by_date[date] = 0
@@ -592,41 +667,16 @@ def get_portfolio_events():
                 elif holding.type == 'DIVIDEND':
                     if holding.date.split('T')[0] <= date:
                         dividends_by_date[date] += holding.total_amount
-    
-    # Get a sorted list of all dates from history
-    all_dates = sorted(value_by_date.keys())
-    # Initialize the previous day values
-    previous_value = 0
-    previous_invested = 0
-    previous_dividends = 0
 
-    # Accumulate values for days without transactions
-    for date in all_dates:
-        # If no new value on this date, carry over from previous day
-        if date not in value_by_date:
-            value_by_date[date] = previous_value
-        if date not in invested_by_date:
-            invested_by_date[date] = previous_invested
-        if date not in dividends_by_date:
-            dividends_by_date[date] = previous_dividends
-        
-        # Update previous values for the next iteration
-        previous_value = value_by_date[date]
-        previous_invested = invested_by_date[date]
-        previous_dividends = dividends_by_date[date]
-
-    #print("Invested by date: ", invested_by_date)
-     # Create the history object with accumulated values
     historyObject = [{"date": date, 
                       "totalValue": value_by_date[date],
                       "totalInvested": invested_by_date[date],
-                      "dividends":dividends_by_date[date]} for date in all_dates]
+                      "dividends":dividends_by_date[date]} for date in sorted(value_by_date.keys())]
     # Format the response into a list of {'date': 'YYYY-MM-DD', 'totalValue': value} objects
     response = {
         'holdings': [holding.to_dict() for holding in holdings],
         "history": historyObject
     }
-    
     #print("response: ", value_by_date)
     return jsonify(response)
 
@@ -1013,8 +1063,8 @@ def ai_opinion():
 def get_ai_opinion():
     symbol = request.args.get('symbol', 'AAPL').upper()  # Default to AAPL if no symbol provided
     stock_data = fetch_stock_data(symbol)
-    force_refresh = request.args.get('force_refresh', 'false').lower() == 'true'
-
+    force_refresh = request.args.get('force_refresh', 'false')
+    print("Fetching AI opinion...", force_refresh)
     # Check if AI opinion is already in session and not forcing refresh
     if 'ai_opinion' in session and session['ai_opinion'].get('symbol') == symbol and not force_refresh:
         print("AI opinion found in session")
@@ -1200,9 +1250,9 @@ if __name__ == "__main__":
     # Initialize the database before starting the app
     with app.app_context():
         db.create_all()
-        #migrate_history_data()
         #update_stock_info()
         # Start the scheduler in a separate thread
         #scheduler_thread = threading.Thread(target=start_scheduler)
         #scheduler_thread.start()
+    socketio.run(app, debug=True)
     app.run(debug=True)
