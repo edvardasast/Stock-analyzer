@@ -1,10 +1,14 @@
 import { setupAIButtonListener } from './eventHandlers.js';
+import { getCookie } from './utils.js';
 
 setupAIButtonListener();
-const savedResponse = localStorage.getItem('aiResponse');
+let savedResponse = localStorage.getItem('aiResponse');
 const currentUrl = window.location.href;
 //how to check if response is null
 if (currentUrl.includes('/ai')) {
+    if (localStorage.getItem('ticker') != getCookie('stockSymbol')) {
+        savedResponse = null;
+    }
     if (savedResponse == null) {
         console.log('Response is null');
     } else {
@@ -44,6 +48,7 @@ export function loadAIOpinion(stockSymbol, force) {
                 return;
             }
             localStorage.setItem('aiResponse', JSON.stringify(aiOpinion));
+            localStorage.setItem('ticker', stockSymbol)
             //console.log('API Response:', data); // Log the entire response object
             if (data.error) {
                 console.error('Error fetching AI opinion:', data.error);

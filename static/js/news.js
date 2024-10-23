@@ -14,6 +14,7 @@ export function loadNews() {
     fetch(`/api/news?symbol=${symbol}`)
         .then(response => response.json())
         .then(data => {
+            console.log(data);
             const newsItems = data.news;
             newsItems.forEach(news => {
                 const newsItem = document.createElement('div');

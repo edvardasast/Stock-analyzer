@@ -33,6 +33,7 @@ export function formatDateToYYYYMMDD(date) {
 }
 // Helper function to format large numbers into billions (B), millions (M), or thousands (K)
 export function formatLargeNumbers(value) {
+    console.log(value)
     if (Math.abs(value) >= 1e9) {
         return (value / 1e9).toFixed(2) + 'B';  // Format to billions
     } else if (Math.abs(value) >= 1e6) {

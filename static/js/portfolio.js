@@ -53,58 +53,60 @@ if (currentUrl.includes('/portfolio')) {
     });
     loadPortfolio();
     updateSortIcons();
-}
-document.getElementById('upload_statement').addEventListener('click', function () {
-    console
-    document.getElementById('loading-container').style.display = 'flex';
-    document.getElementById('portfolio_container').style.display = 'none';
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv';
-    input.onchange = function (event) {
-        const file = event.target.files[0];
-        if (file) {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('loading-container').style.display = 'none';
-                        document.getElementById('portfolio_container').style.display = 'block';
-                        loadPortfolio(); // Refresh portfolio data
-                    } else {
-                        console.error('Error uploading file:', data.error);
-                    }
+    document.getElementById('upload_statement').addEventListener('click', function () {
+        console
+        document.getElementById('loading-container').style.display = 'flex';
+        document.getElementById('portfolio_container').style.display = 'none';
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.csv';
+        input.onchange = function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('file', file);
+    
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
                 })
-                .catch(error => console.error('Error uploading file:', error));
-        }
-    };
-    input.click();
-});
-
-document.addEventListener('DOMContentLoaded', function () {
-    const socket = io.connect('http://' + document.domain + ':' + location.port);
-
-    socket.on('update', function (data) {
-        const messageContainer = document.getElementById('message-container');
-        let message = document.getElementById('update-message');
-
-        if (!message) {
-            // Create the element if it doesn't exist
-            message = document.createElement('p');
-            message.id = 'update-message';
-            messageContainer.appendChild(message);
-        }
-
-        // Update the content of the element
-        message.textContent = data.message;
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            document.getElementById('loading-container').style.display = 'none';
+                            document.getElementById('portfolio_container').style.display = 'block';
+                            loadPortfolio(); // Refresh portfolio data
+                        } else {
+                            console.error('Error uploading file:', data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error uploading file:', error));
+            }
+        };
+        input.click();
     });
-});
+    document.addEventListener('DOMContentLoaded', function () {
+        const socket = io.connect('http://' + document.domain + ':' + location.port);
+    
+        socket.on('update', function (data) {
+            const messageContainer = document.getElementById('message-container');
+            let message = document.getElementById('update-message');
+    
+            if (!message) {
+                // Create the element if it doesn't exist
+                message = document.createElement('p');
+                message.id = 'update-message';
+                messageContainer.appendChild(message);
+            }
+    
+            // Update the content of the element
+            message.textContent = data.message;
+        });
+    });
+}
+
+
+
 
 function toggleSortOrder(sortBy) {
     if (currentSortBy === sortBy) {

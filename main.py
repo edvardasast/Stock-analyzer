@@ -724,18 +724,21 @@ def get_portfolio_tickers_info():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 def format_number(value):
-    if value >= 1e12:
+    sign = "-" if value < 0 else ""
+    abs_value = abs(value)
+    
+    if abs_value >= 1e12:
         # Trillions
-        return f"{round(value / 1e12, 2)}T"
-    elif value >= 1e9:
+        return f"{sign}{round(abs_value / 1e12, 2)}T"
+    elif abs_value >= 1e9:
         # Billions
-        return f"{round(value / 1e9, 2)}B"
-    elif value >= 1e6:
+        return f"{sign}{round(abs_value / 1e9, 2)}B"
+    elif abs_value >= 1e6:
         # Millions
-        return f"{round(value / 1e6, 2)}M"
+        return f"{sign}{round(abs_value / 1e6, 2)}M"
     else:
         # Less than a million, return the raw value
-        return str(value)
+        return f"{sign}{abs_value}"
     
 @app.route("/api/stock_data")
 def get_stock_data():
@@ -757,11 +760,12 @@ def get_stock_data():
         net_incomes = financials.loc['Net Income'].values[:4]
         revenues = financials.loc['Total Revenue'].values[:4]
         # Convert the values to billions and round to 2 decimal places
-        net_incomes = [round(net_income, 2) for net_income in net_incomes]
-        revenues = [round(revenue, 2) for revenue in revenues]
+        
+        net_incomes = [safe_round(net_income, 2) for net_income in net_incomes]
+        revenues = [safe_round(revenue, 2) for revenue in revenues]
         # Calculate the 4-year total net income and total revenue
-        total_net_income = round(sum(net_incomes), 2)
-        total_revenue = round(sum(revenues), 2)
+        total_net_income = safe_round(sum(net_incomes), 2)
+        total_revenue = safe_round(sum(revenues), 2)
         # Ensure there are enough data points to calculate the 3-year compound growth
         if len(revenues) < 4:
             return jsonify({"error": "Not enough data to calculate 3-year compound revenue growth."}), 400
@@ -773,7 +777,7 @@ def get_stock_data():
         revenue_3_years_ago_billion = revenue_3_years_ago / 1e9
         # Calculate the 3-Year Compound Revenue Growth
         cagr = calculate_cagr(revenue_3_years_ago_billion, revenue_current_billion, 3)
-        cagr_percentage = round(cagr * 100, 2)
+        cagr_percentage = safe_round(cagr * 100, 2)
         # Extract the operating cash flow and capital expenditures for the last 4 years
         operating_cash_flows = cash_flow_statement.loc['Operating Cash Flow'].values[:4]
         #print(cash_flow_statement)
