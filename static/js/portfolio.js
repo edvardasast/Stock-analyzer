@@ -7,29 +7,30 @@ const symbol = getCookie('stockSymbol');
 let range = 'YTD'
 let sortOrder = 'desc'; // Default sorting order
 let currentSortBy = 'invested';
+let portfolioData = [];
 
 //how to check if response is null
 if (currentUrl.includes('/portfolio')) {
     // Add event listeners for sorting buttons
     document.getElementById('sort-invested').addEventListener('click', function () {
         toggleSortOrder('invested');
-        loadPortfolio('invested');
+        sortAndRenderPortfolio('invested');
     });
     document.getElementById('sort-current-value').addEventListener('click', function () {
         toggleSortOrder('currentValue');
-        loadPortfolio('currentValue');
+        sortAndRenderPortfolio('currentValue');
     });
     document.getElementById('sort-changes').addEventListener('click', function () {
         toggleSortOrder('changes');
-        loadPortfolio('changes');
+        sortAndRenderPortfolio('changes');
     });
     document.getElementById('sort-shares').addEventListener('click', function () {
         toggleSortOrder('shares');
-        loadPortfolio('shares');
+        sortAndRenderPortfolio('shares');
     });
     document.getElementById('sort-dividends').addEventListener('click', function () {
         toggleSortOrder('dividends');
-        loadPortfolio('dividends');
+        sortAndRenderPortfolio('dividends');
     });
     document.getElementById('1MBtn').addEventListener('click', function () {
         setActiveButton('1M');
@@ -144,7 +145,7 @@ export function loadPortfolio(sortBy = 'invested') {
             let totalPortfolioValue = 0;
             let totalDividends = 0;
             const fetchPromises = [];
-            const portfolioData = [];
+            portfolioData = [];
 
 
             Object.entries(portfolioItems).forEach(([ticker, data]) => {
@@ -254,69 +255,12 @@ export function loadPortfolio(sortBy = 'invested') {
 
             // Wait for all promises to resolve before updating the UI
             Promise.all(fetchPromises).then(() => {
-                // Sort portfolio data based on the selected criteria
-                portfolioData.sort((a, b) => {
-                    let comparison = 0;
-                    switch (sortBy) {
-                        case 'invested':
-                            comparison = b.investedAmount - a.investedAmount;
-                            break;
-                        case 'currentValue':
-                            comparison = b.currentValue - a.currentValue;
-                            break;
-                        case 'changes':
-                            comparison = b.growthLoss - a.growthLoss;
-                            break;
-                        case 'shares':
-                            comparison = b.stocksAmount - a.stocksAmount;
-                            break;
-                        case 'dividends':
-                            comparison = b.dividends - a.dividends;
-                            break;
-                        default:
-                            comparison = 0;
-                    }
-                    return sortOrder === 'asc' ? -comparison : comparison;
-                });
-
-                // Generate HTML for sorted portfolio items
-                portfolioData.forEach(item => {
-                    const portfolioItemHTML = `
-                        <div class="portfolio-item">
-                            <div class="portfolio-row">
-                                <div class="portfolio-column holding-column">
-                                    <div class="company-logo company-logo-${item.ticker}">
-                                        <img src="${item.logoUrl}" alt="${item.ticker_name} Logo" onerror="this.onerror=null;this.src='/default-logo.png';">
-                                    </div>
-                                    <div class="portfolio-name">
-                                        <a id="ticker-link-${item.ticker}" data-ticker="${item.ticker}">
-                                            <h2>${item.ticker_name}</h2>
-                                        </a>
-                                        <p>${item.ticker}</p>
-                                    </div>
-                                </div>
-                                <div class="portfolio-column">${item.investedAmount.toFixed(0)}</div>
-                                <div class="portfolio-column ${item.currentValueClass}">${item.currentValue}</div>
-                                <div class="portfolio-column ${item.growthLossClass}">${item.growthLoss}%</div>
-                                <div class="portfolio-column">${item.stocksAmount.toFixed(0)}</div>
-                                <div class="portfolio-column">${item.dividends.toFixed(0)}</div>
-                                <div class="portfolio-column">${(item.investedAmount / item.stocksAmount).toFixed(2)}</div>
-                            </div>
-                        </div>
-                    `;
-
-                    const portfolioItem = document.createElement('div');
-                    portfolioItem.innerHTML = portfolioItemHTML;
-                    portfolioContainer.appendChild(portfolioItem);
-                });
-
+                sortAndRenderPortfolio(sortBy);
                 updateUIAfterLoad(totalPortfolioValue, total_invested, totalDividends);
 
                 document.getElementById('loading-container').style.display = 'none';
                 document.getElementById('portfolio_container').style.display = 'block';
 
-                // Add event listeners for ticker links and time frame buttons
-                addTickerLinkListeners();
             });
         })
         .catch(error => {
@@ -324,7 +268,69 @@ export function loadPortfolio(sortBy = 'invested') {
             portfolioContainer.innerHTML = '<p>Failed to load portfolio. Please try again later.</p>';
         });
 }
+function sortAndRenderPortfolio(sortBy) {
+    const portfolioContainer = document.getElementById('portfolio-container');
+    portfolioContainer.innerHTML = '';  // Clear any existing content
 
+    // Sort portfolio data based on the selected criteria
+    portfolioData.sort((a, b) => {
+        let comparison = 0;
+        switch (sortBy) {
+            case 'invested':
+                comparison = b.investedAmount - a.investedAmount;
+                break;
+            case 'currentValue':
+                comparison = b.currentValue - a.currentValue;
+                break;
+            case 'changes':
+                comparison = b.growthLoss - a.growthLoss;
+                break;
+            case 'shares':
+                comparison = b.stocksAmount - a.stocksAmount;
+                break;
+            case 'dividends':
+                comparison = b.dividends - a.dividends;
+                break;
+            default:
+                comparison = 0;
+        }
+        return sortOrder === 'asc' ? -comparison : comparison;
+    });
+
+    // Generate HTML for sorted portfolio items
+    portfolioData.forEach(item => {
+        const portfolioItemHTML = `
+            <div class="portfolio-item">
+                <div class="portfolio-row">
+                    <div class="portfolio-column holding-column">
+                        <div class="company-logo company-logo-${item.ticker}">
+                            <img src="${item.logoUrl}" alt="${item.ticker_name} Logo" onerror="this.onerror=null;this.src='/default-logo.png';">
+                        </div>
+                        <div class="portfolio-name">
+                            <a id="ticker-link-${item.ticker}" data-ticker="${item.ticker}">
+                                <h2>${item.ticker_name}</h2>
+                            </a>
+                            <p>${item.ticker}</p>
+                        </div>
+                    </div>
+                    <div class="portfolio-column">${item.investedAmount.toFixed(0)}</div>
+                    <div class="portfolio-column ${item.currentValueClass}">${item.currentValue}</div>
+                    <div class="portfolio-column ${item.growthLossClass}">${item.growthLoss}%</div>
+                    <div class="portfolio-column">${item.stocksAmount.toFixed(0)}</div>
+                    <div class="portfolio-column">${item.dividends.toFixed(0)}</div>
+                    <div class="portfolio-column">${(item.investedAmount / item.stocksAmount).toFixed(2)}</div>
+                </div>
+            </div>
+        `;
+
+        const portfolioItem = document.createElement('div');
+        portfolioItem.innerHTML = portfolioItemHTML;
+        portfolioContainer.appendChild(portfolioItem);
+    });
+
+    // Add event listeners for ticker links
+    addTickerLinkListeners();
+}
 function updateUIAfterLoad(totalPortfolioValue, total_invested, dividends) {
     document.getElementById('total-portfolio-value').textContent = `$${totalPortfolioValue.toFixed(0)}`;
     document.getElementById('total-portfolio-invested').textContent = `$${total_invested.toFixed(0)}`;
