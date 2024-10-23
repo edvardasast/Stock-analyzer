@@ -5,8 +5,32 @@ import { setCookie, getCookie, setActiveButton, formatDateToYYYYMMDD, formatLarg
 const currentUrl = window.location.href;
 const symbol = getCookie('stockSymbol');
 let range = 'YTD'
+let sortOrder = 'desc'; // Default sorting order
+let currentSortBy = 'invested';
+
 //how to check if response is null
 if (currentUrl.includes('/portfolio')) {
+    // Add event listeners for sorting buttons
+    document.getElementById('sort-invested').addEventListener('click', function () {
+        toggleSortOrder('invested');
+        loadPortfolio('invested');
+    });
+    document.getElementById('sort-current-value').addEventListener('click', function () {
+        toggleSortOrder('currentValue');
+        loadPortfolio('currentValue');
+    });
+    document.getElementById('sort-changes').addEventListener('click', function () {
+        toggleSortOrder('changes');
+        loadPortfolio('changes');
+    });
+    document.getElementById('sort-shares').addEventListener('click', function () {
+        toggleSortOrder('shares');
+        loadPortfolio('shares');
+    });
+    document.getElementById('sort-dividends').addEventListener('click', function () {
+        toggleSortOrder('dividends');
+        loadPortfolio('dividends');
+    });
     document.getElementById('1MBtn').addEventListener('click', function () {
         setActiveButton('1M');
         updatePortfolioChart('1M', document.getElementById('1MBtn')); // Replace 'AAPL' with the desired symbol
@@ -27,6 +51,7 @@ if (currentUrl.includes('/portfolio')) {
         updatePortfolioChart('MAX', document.getElementById('MAXBtn')); // Replace 'AAPL' with the desired symbol
     });
     loadPortfolio();
+    updateSortIcons();
 }
 document.getElementById('upload_statement').addEventListener('click', function () {
     console
@@ -79,7 +104,32 @@ document.addEventListener('DOMContentLoaded', function () {
         message.textContent = data.message;
     });
 });
-export function loadPortfolio() {
+
+function toggleSortOrder(sortBy) {
+    if (currentSortBy === sortBy) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortBy = sortBy;
+        sortOrder = 'desc'; // Default to descending when changing sort criteria
+    }
+    updateSortIcons();
+}
+function updateSortIcons() {
+    console.log('updateSortIcons');
+    const sortButtons = document.querySelectorAll('#sorting-buttons .portfolio-column');
+    sortButtons.forEach(button => {
+        const icon = button.querySelector('i');
+        if (icon) { // Check if the icon element exists
+            icon.className = 'fas fa-sort'; // Reset all icons to default
+
+            if (button.id === `sort-${currentSortBy}`) {
+                console.log('button.id found ', button.id);
+                icon.className = sortOrder === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+            }
+        }
+    });
+}
+export function loadPortfolio(sortBy = 'invested') {
     document.getElementById('portfolio_container').style.display = 'none';
     document.getElementById('loading-container').style.display = 'flex';
 
@@ -92,12 +142,15 @@ export function loadPortfolio() {
             let total_invested = 0;
             let total_current = 0;
             let totalPortfolioValue = 0;
-            let dividends = 0;
+            let totalDividends = 0;
             const fetchPromises = [];
+            const portfolioData = [];
+
 
             Object.entries(portfolioItems).forEach(([ticker, data]) => {
                 let investedAmount = 0;
                 let stocksAmount = 0;
+                let dividends = 0;
 
                 if (Array.isArray(data)) {
                     data.forEach(event => {
@@ -125,6 +178,7 @@ export function loadPortfolio() {
                                 stocksAmount += quantity;
                                 break;
                             case 'DIVIDEND':
+                                totalDividends += amount;
                                 dividends += amount;
                                 break;
                         }
@@ -133,7 +187,7 @@ export function loadPortfolio() {
                     total_invested += parseFloat(investedAmount);
                 }
 
-                if (stocksAmount > 0) {
+                if (stocksAmount > 0.1) {
                     const fetchPromise = fetch(`/api/ticker_info?symbol=${ticker}`)
                         .then(response => response.json())
                         .then(data => {
@@ -144,8 +198,8 @@ export function loadPortfolio() {
 
                             const ticker_name = data.info.longName;
                             const current_price = data.info.previousClose;
-                            const currentValue = (stocksAmount * current_price).toFixed(2);
-                            const growthLoss = ((currentValue - investedAmount) / investedAmount * 100).toFixed(2);
+                            const currentValue = (stocksAmount * current_price).toFixed(0);
+                            const growthLoss = ((currentValue - investedAmount) / investedAmount * 100).toFixed(0);
                             totalPortfolioValue += parseFloat(currentValue);
 
                             const companyWebsite = data.info.website;
@@ -154,6 +208,18 @@ export function loadPortfolio() {
                             const currentValueClass = currentValue < investedAmount ? 'negative' : 'positive';
                             const growthLossClass = growthLoss < 0 ? 'negative' : 'positive';
 
+                            portfolioData.push({
+                                ticker,
+                                ticker_name,
+                                investedAmount,
+                                currentValue,
+                                growthLoss,
+                                stocksAmount,
+                                dividends,
+                                logoUrl,
+                                currentValueClass,
+                                growthLossClass
+                            });
                             return `
                                 <div class="portfolio-item">
                                     <div class="portfolio-row">
@@ -168,10 +234,11 @@ export function loadPortfolio() {
                                                 <p>${ticker}</p>
                                             </div>
                                         </div>
-                                        <div class="portfolio-column">${investedAmount.toFixed(2)}</div>
+                                        <div class="portfolio-column">${investedAmount.toFixed(0)}</div>
                                         <div class="portfolio-column ${currentValueClass}">${currentValue}</div>
                                         <div class="portfolio-column ${growthLossClass}">${growthLoss}%</div>
-                                        <div class="portfolio-column">${stocksAmount.toFixed(2)}</div>
+                                        <div class="portfolio-column">${stocksAmount.toFixed(0)}</div>
+                                         <div class="portfolio-column">${dividends.toFixed(0)}</div>
                                         <div class="portfolio-column">${(investedAmount / stocksAmount).toFixed(2)}</div>
                                     </div>
                                 </div>
@@ -186,16 +253,64 @@ export function loadPortfolio() {
             });
 
             // Wait for all promises to resolve before updating the UI
-            Promise.all(fetchPromises).then(portfolioItemsHTML => {
-                portfolioItemsHTML.forEach(itemHTML => {
-                    if (itemHTML) {
-                        const portfolioItem = document.createElement('div');
-                        portfolioItem.innerHTML = itemHTML;
-                        portfolioContainer.appendChild(portfolioItem);
+            Promise.all(fetchPromises).then(() => {
+                // Sort portfolio data based on the selected criteria
+                portfolioData.sort((a, b) => {
+                    let comparison = 0;
+                    switch (sortBy) {
+                        case 'invested':
+                            comparison = b.investedAmount - a.investedAmount;
+                            break;
+                        case 'currentValue':
+                            comparison = b.currentValue - a.currentValue;
+                            break;
+                        case 'changes':
+                            comparison = b.growthLoss - a.growthLoss;
+                            break;
+                        case 'shares':
+                            comparison = b.stocksAmount - a.stocksAmount;
+                            break;
+                        case 'dividends':
+                            comparison = b.dividends - a.dividends;
+                            break;
+                        default:
+                            comparison = 0;
                     }
+                    return sortOrder === 'asc' ? -comparison : comparison;
                 });
 
-                updateUIAfterLoad(totalPortfolioValue, total_invested, dividends);
+                // Generate HTML for sorted portfolio items
+                portfolioData.forEach(item => {
+                    const portfolioItemHTML = `
+                        <div class="portfolio-item">
+                            <div class="portfolio-row">
+                                <div class="portfolio-column holding-column">
+                                    <div class="company-logo company-logo-${item.ticker}">
+                                        <img src="${item.logoUrl}" alt="${item.ticker_name} Logo" onerror="this.onerror=null;this.src='/default-logo.png';">
+                                    </div>
+                                    <div class="portfolio-name">
+                                        <a id="ticker-link-${item.ticker}" data-ticker="${item.ticker}">
+                                            <h2>${item.ticker_name}</h2>
+                                        </a>
+                                        <p>${item.ticker}</p>
+                                    </div>
+                                </div>
+                                <div class="portfolio-column">${item.investedAmount.toFixed(0)}</div>
+                                <div class="portfolio-column ${item.currentValueClass}">${item.currentValue}</div>
+                                <div class="portfolio-column ${item.growthLossClass}">${item.growthLoss}%</div>
+                                <div class="portfolio-column">${item.stocksAmount.toFixed(0)}</div>
+                                <div class="portfolio-column">${item.dividends.toFixed(0)}</div>
+                                <div class="portfolio-column">${(item.investedAmount / item.stocksAmount).toFixed(2)}</div>
+                            </div>
+                        </div>
+                    `;
+
+                    const portfolioItem = document.createElement('div');
+                    portfolioItem.innerHTML = portfolioItemHTML;
+                    portfolioContainer.appendChild(portfolioItem);
+                });
+
+                updateUIAfterLoad(totalPortfolioValue, total_invested, totalDividends);
 
                 document.getElementById('loading-container').style.display = 'none';
                 document.getElementById('portfolio_container').style.display = 'block';

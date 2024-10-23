@@ -40,12 +40,13 @@ Portfolio | Stock Analyzer
             <div class="container">
                 {% include 'portfolio_chart.html' %}
             </div>
-            <div class="portfolio-row">
-                <div class="portfolio-column holding-column">Stock</div>
-                <div class="portfolio-column">Invested</div>
-                <div class="portfolio-column">Current Value</div>
-                <div class="portfolio-column">Changes</div>
-                <div class="portfolio-column">Shares</div>
+            <div class="portfolio-row" id="sorting-buttons">
+                <div class="portfolio-column holding-column" >Stock</div>
+                <div class="portfolio-column" id="sort-invested">Invested <i class="fas fa-sort"></i></div>
+                <div class="portfolio-column" id="sort-current-value">Current Value <i class="fas fa-sort"></i></div>
+                <div class="portfolio-column" id="sort-changes">Changes <i class="fas fa-sort"></i></div>
+                <div class="portfolio-column" id="sort-shares">Shares <i class="fas fa-sort"></i></div>
+                <div class="portfolio-column" id="sort-dividends">Dividends <i class="fas fa-sort"></i></div>
                 <div class="portfolio-column">Original Avg. Price</div>
             </div>
             <div id="portfolio-container" class="portfolio-container">
