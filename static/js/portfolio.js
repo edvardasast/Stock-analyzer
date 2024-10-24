@@ -65,7 +65,7 @@ if (currentUrl.includes('/portfolio')) {
             if (file) {
                 const formData = new FormData();
                 formData.append('file', file);
-    
+
                 fetch('/upload', {
                     method: 'POST',
                     body: formData
@@ -87,24 +87,23 @@ if (currentUrl.includes('/portfolio')) {
     });
     document.addEventListener('DOMContentLoaded', function () {
         const socket = io.connect('http://' + document.domain + ':' + location.port);
-    
+
         socket.on('update', function (data) {
             const messageContainer = document.getElementById('message-container');
             let message = document.getElementById('update-message');
-    
+
             if (!message) {
                 // Create the element if it doesn't exist
                 message = document.createElement('p');
                 message.id = 'update-message';
                 messageContainer.appendChild(message);
             }
-    
+
             // Update the content of the element
             message.textContent = data.message;
         });
     });
 }
-
 
 
 
@@ -154,13 +153,21 @@ export function loadPortfolio(sortBy = 'invested') {
                 let investedAmount = 0;
                 let stocksAmount = 0;
                 let dividends = 0;
-
+                const tickerEvents = [];
                 if (Array.isArray(data)) {
                     data.forEach(event => {
                         const eventDate = new Date(event['Date']).toISOString().split('T')[0];
                         const amount = parseFloat(event['Total Amount'].replace('$', '').replace(',', ''));
                         const quantity = parseFloat(event['Quantity']);
-
+                        // Create event object
+                        const eventObject = {
+                            date: eventDate,
+                            type: event['Type'],
+                            amount: amount,
+                            quantity: quantity,
+                            ticker: ticker // Assuming ticker is available in the scope
+                        };
+                        tickerEvents.push(eventObject);
                         switch (event['Type']) {
                             case 'BUY':
                             case 'BUY - LIMIT':
@@ -212,6 +219,7 @@ export function loadPortfolio(sortBy = 'invested') {
                             const growthLossClass = growthLoss < 0 ? 'negative' : 'positive';
 
                             portfolioData.push({
+                                tickerEvents,
                                 ticker,
                                 ticker_name,
                                 investedAmount,
@@ -270,6 +278,50 @@ export function loadPortfolio(sortBy = 'invested') {
             portfolioContainer.innerHTML = '<p>Failed to load portfolio. Please try again later.</p>';
         });
 }
+
+
+function fetchEventsForTicker(ticker, container) {
+    // Filter events for the specific ticker
+    const events = portfolioData.filter(event => event.ticker === ticker);
+    console.log('events', events);
+    if (events.length > 0) {
+        container.innerHTML = ''; // Clear any existing content
+        const tableHeader = `
+            <table class="event-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        `;
+        container.innerHTML += tableHeader;
+
+        const tableBody = container.querySelector('.event-table tbody');
+        events.forEach(event => {
+            console.log('event', event);
+            event.tickerEvents.forEach(event => {
+                const eventHTML = `
+                <tr>
+                    <td>${event.date}</td>
+                    <td>${event.type}</td>
+                    <td>${event.amount}</td>
+                    <td>${event.quantity}</td>
+                </tr>
+            `;
+            tableBody.innerHTML += eventHTML;
+            });
+        });
+    } else {
+        container.innerHTML = '<p>No events found for this ticker.</p>';
+    }
+}
+
 function sortAndRenderPortfolio(sortBy) {
     const portfolioContainer = document.getElementById('portfolio-container');
     portfolioContainer.innerHTML = '';  // Clear any existing content
@@ -322,12 +374,24 @@ function sortAndRenderPortfolio(sortBy) {
                     <div class="portfolio-column">${item.dividends.toFixed(0)}</div>
                     <div class="portfolio-column">${(item.investedAmount / item.stocksAmount).toFixed(2)}</div>
                 </div>
+                <div class="portfolio-events" id="events-${item.ticker}" style="display: none;"></div>
             </div>
         `;
 
         const portfolioItem = document.createElement('div');
         portfolioItem.innerHTML = portfolioItemHTML;
         portfolioContainer.appendChild(portfolioItem);
+
+        // Add event listener for expanding/collapsing events
+        portfolioItem.querySelector('.portfolio-row').addEventListener('click', function () {
+            const eventsContainer = document.getElementById(`events-${item.ticker}`);
+            if (eventsContainer.style.display === 'none') {
+                eventsContainer.style.display = 'block';
+                fetchEventsForTicker(item.ticker, eventsContainer);
+            } else {
+                eventsContainer.style.display = 'none';
+            }
+        });
     });
 
     // Add event listeners for ticker links
