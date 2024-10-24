@@ -15,11 +15,31 @@ if (currentUrl.includes('/ai')) {
         const aiOpinion = JSON.parse(savedResponse); // Parse the saved response
         showData(aiOpinion);
     }
+    document.addEventListener('DOMContentLoaded', function () {
+        const socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        socket.on('update', function (data) {
+            const messageContainer = document.getElementById('message-container');
+            let message = document.getElementById('update-message');
+
+            if (!message) {
+                // Create the element if it doesn't exist
+                message = document.createElement('p');
+                message.id = 'update-message';
+                messageContainer.appendChild(message);
+            }
+
+            // Update the content of the element
+            message.textContent = data.message;
+        });
+    });
 }
 
 export function loadAIOpinion(stockSymbol, force) {
     console.log('Load AI Opinion', force);
     document.getElementById('loading-container').style.display = 'flex';
+    document.getElementById('company-situation').style.display = 'none';
+    document.getElementById('investment-attractiveness').style.display = 'none';
     // Get selected information
     const includeFinancialData = document.getElementById('financial-data').checked;
     const includeYearlyReports = document.getElementById('yearly-reports').checked;
@@ -63,6 +83,7 @@ export function loadAIOpinion(stockSymbol, force) {
         });
 }
 function showData(aiOpinion) {
+    console.log('Show AI Opinion:', aiOpinion);
     document.getElementById('loading-container').style.display = 'none';
     document.getElementById('company-situation').style.display = 'block';
     document.getElementById('investment-attractiveness').style.display = 'block';
@@ -74,6 +95,7 @@ function showData(aiOpinion) {
         document.getElementById("competitors").textContent = aiOpinion.company_situation.main_competitors || 'N/A';
         document.getElementById("potential_opportunities").textContent = aiOpinion.company_situation.potential_opportunities || 'N/A';
         document.getElementById("potential-risks").textContent = aiOpinion.company_situation.potential_risks || 'N/A';
+        document.getElementById("opinion-from-news").textContent = aiOpinion.company_situation.opinion_from_news || 'N/A';
         document.getElementById("rating").textContent = aiOpinion.investment_attractiveness.rating + "/10" || 'N/A';
         document.getElementById("multibagger-potential").textContent = aiOpinion.investment_attractiveness.multibagger_potential + "/10" || 'N/A';
         document.getElementById("growth_potential").textContent = aiOpinion.investment_attractiveness.growth_estimate + '%' || 'N/A';

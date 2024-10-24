@@ -24,7 +24,7 @@ from flask_socketio import SocketIO, emit
 
 # Custom modules (ensure these are available in your project)
 from utils.gov_scraper import get_yearly_report, get_quarterly_report
-from utils.news_downloader import download_news
+from utils.news_downloader import NewsDownloader
 
 # Load environment variables from .env file
 load_dotenv()
@@ -68,6 +68,8 @@ if not OPENAI_API_KEY:
 # Global cache to store yfinance data
 data_cache = {}
 
+# Initialize the NewsDownloader with the Socket.IO instance
+news_downloader = NewsDownloader(socketio)
 # Initialize the scheduler
 #scheduler = BackgroundScheduler()
 
@@ -1107,7 +1109,7 @@ def get_ai_opinion():
             )
         if include_news:
             news = stock_data.get('news', {})
-            news = download_news(symbol, news, gpt_model)
+            news = news_downloader.download_news(symbol, news, gpt_model)
             prompt += (
                 f"News: {news}\n"
             )
@@ -1129,6 +1131,7 @@ def get_ai_opinion():
             f"Based on the following financial data for ({symbol}), provide a detailed financial analysis "
             f"and investment recommendation. Include discussions on its financial health, market position, growth prospects, "
             f"and any potential risks.\n\n"
+            f"and your opinion about provided news.\n\n"
             f"Key Financial Metrics:\n"
             f"{prompt}"
         )
@@ -1142,6 +1145,7 @@ def get_ai_opinion():
             f'    "main_competitors": ""'
             f'    "potential_oportunities": ""'
             f'    "potential_risks": ""'
+            f'    "opinion_from_news": ""'
             f'  }},'
             f'  "investment_attractiveness": {{'
             f'    "rating": 0-10,'

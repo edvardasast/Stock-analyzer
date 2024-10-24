@@ -5,6 +5,8 @@ AI Opinion | Stock Analyzer
 {% endblock %}
 
 {% block content %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+
 <div class="container">
     <div>Select which data to include</div>
     <div class="checkbox-container">
@@ -36,6 +38,7 @@ AI Opinion | Stock Analyzer
         <p><strong>Competitors:</strong> <span id="competitors"></span></p>
         <p><strong>Opportunities:</strong> <span id="potential_opportunities"></span></p>
         <p><strong>Potential Risks:</strong> <span id="potential-risks"></span></p>
+        <p><strong>Opinion from news:</strong> <span id="opinion-from-news"></span></p>
     </div>
     <div class="section" id="investment-attractiveness">
         <h2>Investment Attractiveness</h2>

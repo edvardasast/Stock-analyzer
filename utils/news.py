@@ -42,7 +42,6 @@ def get_cleaned_article_text(url, retries=3, delay=2):
                 
                 # Find the specific div with class "body yf-5ef8bf"
                 div_content = soup.find('div', class_='body yf-5ef8bf')
-                logging.info(f"Found div with class 'body yf-5ef8bf': {div_content}")
                 if div_content:
                     # Extract text from paragraph (<p>) tags, ignoring links and unnecessary elements
                     text_elements = []
